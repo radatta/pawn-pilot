@@ -1,105 +1,106 @@
-<a href="https://demo-nextjs-with-supabase.vercel.app/">
-  <img alt="Next.js and Supabase Starter Kit - the fastest way to build apps with Next.js and Supabase" src="https://demo-nextjs-with-supabase.vercel.app/opengraph-image.png">
-  <h1 align="center">Next.js and Supabase Starter Kit</h1>
-</a>
+# PawnPilot
 
-<p align="center">
- The fastest way to build apps with Next.js and Supabase
-</p>
+**Your Personal AI Chess Coach**
 
-<p align="center">
-  <a href="#features"><strong>Features</strong></a> ·
-  <a href="#demo"><strong>Demo</strong></a> ·
-  <a href="#deploy-to-vercel"><strong>Deploy to Vercel</strong></a> ·
-  <a href="#clone-and-run-locally"><strong>Clone and run locally</strong></a> ·
-  <a href="#feedback-and-issues"><strong>Feedback and issues</strong></a>
-  <a href="#more-supabase-examples"><strong>More Examples</strong></a>
-</p>
-<br/>
+---
 
-## Features
+## Overview
 
-- Works across the entire [Next.js](https://nextjs.org) stack
-  - App Router
-  - Pages Router
-  - Middleware
-  - Client
-  - Server
-  - It just works!
-- supabase-ssr. A package to configure Supabase Auth to use cookies
-- Password-based authentication block installed via the [Supabase UI Library](https://supabase.com/ui/docs/nextjs/password-based-auth)
-- Styling with [Tailwind CSS](https://tailwindcss.com)
-- Components with [shadcn/ui](https://ui.shadcn.com/)
-- Optional deployment with [Supabase Vercel Integration and Vercel deploy](#deploy-your-own)
-  - Environment variables automatically assigned to Vercel project
+PawnPilot is an AI-powered chess improvement platform designed for players who want to accelerate their learning by playing against adaptive, insightful bots. Unlike traditional chess sites, PawnPilot focuses exclusively on self-improvement: every game is against an AI that not only matches your level but helps you understand your decisions, track your progress, and overcome your unique weaknesses.
 
-## Demo
+---
 
-You can view a fully working demo at [demo-nextjs-with-supabase.vercel.app](https://demo-nextjs-with-supabase.vercel.app/).
+## Key Features
 
-## Deploy to Vercel
+- **Adaptive AI Opponent**Play against a bot that dynamically adjusts its strength and style to challenge you at just the right level.
+- **Real-Time Move Explanations**Receive natural language feedback on your moves and the bot's moves as you play, helping you grasp tactical and strategic ideas.
+- **Interactive Hints & "What If" Analysis**Request hints or explore alternate lines mid-game, with the AI explaining the consequences of different choices.
+- **Personalized Weakness Tracking**Automatic analysis of your games to identify recurring mistakes and areas for improvement, visualized in a personal dashboard.
+- **Custom Puzzle Generation**Instantly practice with puzzles generated from your own games and mistakes, reinforcing concepts where you need it most.
+- **Opening Explorer & Recommendations**Track your opening repertoire and get AI-driven suggestions for new lines and improvements tailored to your play.
+- **Endgame Trainer**Practice key endgames with targeted feedback and tips from the AI.
+- **Goal-Oriented Training Plans**Set improvement goals and follow a personalized training path with progress tracking.
+- **Progress Analytics**
+  Visualize your improvement over time with stats on accuracy, blunder rates, and phase-by-phase strengths.
 
-Vercel deployment will guide you through creating a Supabase account and project.
+---
 
-After installation of the Supabase integration, all relevant environment variables will be assigned to the project so the deployment is fully functioning.
+## Tech Stack
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fvercel%2Fnext.js%2Ftree%2Fcanary%2Fexamples%2Fwith-supabase&project-name=nextjs-with-supabase&repository-name=nextjs-with-supabase&demo-title=nextjs-with-supabase&demo-description=This+starter+configures+Supabase+Auth+to+use+cookies%2C+making+the+user%27s+session+available+throughout+the+entire+Next.js+app+-+Client+Components%2C+Server+Components%2C+Route+Handlers%2C+Server+Actions+and+Middleware.&demo-url=https%3A%2F%2Fdemo-nextjs-with-supabase.vercel.app%2F&external-id=https%3A%2F%2Fgithub.com%2Fvercel%2Fnext.js%2Ftree%2Fcanary%2Fexamples%2Fwith-supabase&demo-image=https%3A%2F%2Fdemo-nextjs-with-supabase.vercel.app%2Fopengraph-image.png)
+- **Frontend:** Next.js, React, Tailwind CSS, shadcn UI
+- **State/Data:** React Query, Supabase (Postgres)
+- **AI/Chess Engine:** Stockfish (WASM), LLM APIs for explanations and feedback
+- **Other:** Supabase Auth, pgvector for advanced analytics
 
-The above will also clone the Starter kit to your GitHub, you can clone that locally and develop locally.
+---
 
-If you wish to just develop locally and not deploy to Vercel, [follow the steps below](#clone-and-run-locally).
+## Developmental Process
 
-## Clone and run locally
+1. **Design Database Schema in Supabase**
 
-1. You'll first need a Supabase project which can be made [via the Supabase dashboard](https://database.new)
+   - Set up tables for users, games, move history, training data, and progress metrics.
+   - Plan for efficient queries and future analytics (consider vector fields for advanced search/analysis).
 
-2. Create a Next.js app using the Supabase Starter template npx command
+2. **Build Core UI Components**
 
-   ```bash
-   npx create-next-app --example with-supabase with-supabase-app
-   ```
+   - Create the main layout and navigation using shadcn UI and Tailwind CSS.
+   - Develop reusable components: chessboard, move list, analysis panel, dashboard widgets.
 
-   ```bash
-   yarn create next-app --example with-supabase with-supabase-app
-   ```
+3. **Integrate Chess Engine & AI Services**
 
-   ```bash
-   pnpm create next-app --example with-supabase with-supabase-app
-   ```
+   - Set up Stockfish (WASM) in the frontend or backend for move generation and analysis.
+   - Connect to LLM APIs for generating move explanations and feedback.
 
-3. Use `cd` to change into the app's directory
+4. **Implement Game Logic & Adaptive Bot**
 
-   ```bash
-   cd with-supabase-app
-   ```
+   - Code game state management and move validation.
+   - Develop the adaptive bot logic: adjust difficulty based on user performance and recent games.
 
-4. Rename `.env.example` to `.env.local` and update the following:
+5. **Enable Real-Time Move Explanations & Hints**
 
-   ```
-   NEXT_PUBLIC_SUPABASE_URL=[INSERT SUPABASE PROJECT URL]
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=[INSERT SUPABASE PROJECT API ANON KEY]
-   ```
+   - Trigger AI explanations after each move.
+   - Allow users to request hints or explore "what if" scenarios during play.
 
-   Both `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` can be found in [your Supabase project's API settings](https://supabase.com/dashboard/project/_?showConnect=true)
+6. **Build Post-Game Analysis & Training Tools**
 
-5. You can now run the Next.js local development server:
+   - Analyze completed games for mistakes and generate personalized puzzles.
+   - Summarize recurring weaknesses and suggest targeted training.
 
-   ```bash
-   npm run dev
-   ```
+7. **Develop Progress Dashboard & Analytics**
 
-   The starter kit should now be running on [localhost:3000](http://localhost:3000/).
+   - Aggregate user stats: accuracy, blunders, phase-by-phase strengths.
+   - Visualize improvement trends and training milestones.
 
-6. This template comes with the default shadcn/ui style initialized. If you instead want other ui.shadcn styles, delete `components.json` and [re-install shadcn/ui](https://ui.shadcn.com/docs/installation/next)
+8. **Implement User Authentication (Optional)**
 
-> Check out [the docs for Local Development](https://supabase.com/docs/guides/getting-started/local-development) to also run Supabase locally.
+   - Add Supabase Auth for user accounts and secure data storage.
 
-## Feedback and issues
+9. **Test, Refine, and Iterate**
 
-Please file feedback and issues over on the [Supabase GitHub org](https://github.com/supabase/supabase/issues/new/choose).
+   - Playtest all flows, collect feedback, and refine UX.
+   - Optimize performance, especially for AI/engine tasks.
 
-## More Supabase examples
+10. **Prepare for Deployment**
 
-- [Next.js Subscription Payments Starter](https://github.com/vercel/nextjs-subscription-payments)
-- [Cookie-based Auth and the Next.js 13 App Router (free course)](https://youtube.com/playlist?list=PL5S4mPUpp4OtMhpnp93EFSo42iQ40XjbF)
-- [Supabase Auth and the Next.js App Router](https://github.com/supabase/supabase/tree/master/examples/auth/nextjs)
+    - Set up environment variables and production configuration.
+    - Deploy to Vercel or your preferred platform.
+
+---
+
+## Why PawnPilot?
+
+- **Solo Focus:** No distractions—just you and the AI, learning at your own pace.
+- **Insightful Feedback:** Move beyond raw evaluation to understand the “why” behind every decision.
+- **Personalization:** Every feature adapts to your unique chess journey, making improvement efficient and engaging.
+
+---
+
+## License
+
+MIT
+
+---
+
+## Author
+
+[Your Name]
