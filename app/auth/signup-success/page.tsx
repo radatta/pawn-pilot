@@ -21,7 +21,7 @@ export default function SignUpSuccessPage() {
 
           <div className="space-y-3">
             <Button asChild className="w-full">
-              <Link href="/auth/login">Continue to Sign In</Link>
+              <Link href="/auth/signin">Continue to Sign In</Link>
             </Button>
 
             <p className="text-sm text-muted-foreground">

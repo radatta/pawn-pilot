@@ -115,7 +115,7 @@ export const SignUpForm = () => {
 
           <div className="text-center text-sm">
             <Link
-              href="/auth/login"
+              href="/auth/signin"
               className="text-primary hover:text-primary/80 transition-colors"
             >
               Already have an account? Sign In

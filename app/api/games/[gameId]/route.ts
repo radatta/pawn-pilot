@@ -1,6 +1,25 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { z } from "zod";
 
+const GameStatusSchema = z.enum(["in_progress", "completed"]);
+
+const GameResultSchema = z.enum([
+    "checkmate",
+    "draw",
+    "resigned",
+    "stalemate",
+    "insufficient_material",
+    "threefold_repetition",
+]);
+
+export type GameResult = z.infer<typeof GameResultSchema>;
+
+const BodySchema = z.object({
+    pgn: z.string(),
+    status: GameStatusSchema.optional(),
+    result: GameResultSchema.optional(),
+});
 export async function GET(
     req: Request,
     { params }: { params: { gameId: string } }
@@ -41,14 +60,23 @@ export async function PUT(
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { pgn, status } = await req.json();
+    const body = await req.json();
 
-    if (!pgn && !status) {
+    if (!body.pgn && !body.status && !body.result) {
         return NextResponse.json(
-            { error: "pgn or status is required" },
+            { error: "pgn, status, or result is required" },
             { status: 400 }
         );
     }
+
+    const parsedBody = BodySchema.safeParse(body);
+
+    if (!parsedBody.success) {
+        console.error(parsedBody.error);
+        return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+    }
+
+    const { pgn, status, result } = parsedBody.data;
 
     // First, verify the user owns the game they are trying to update
     const { data: game, error: fetchError } = await supabase
@@ -62,10 +90,11 @@ export async function PUT(
         return NextResponse.json({ error: "Game not found or access denied" }, { status: 404 });
     }
 
+
     // Now, perform the update
     const { data, error } = await supabase
         .from("games")
-        .update({ pgn, status })
+        .update({ pgn, status, result })
         .eq("id", (await params).gameId)
         .select()
         .single();

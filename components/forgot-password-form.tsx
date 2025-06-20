@@ -56,7 +56,7 @@ export const ForgotPasswordForm = () => {
           </p>
 
           <Button asChild className="w-full">
-            <Link href="/auth/login">Back to Sign In</Link>
+            <Link href="/auth/signin">Back to Sign In</Link>
           </Button>
         </CardContent>
       </Card>
@@ -98,7 +98,7 @@ export const ForgotPasswordForm = () => {
 
           <div className="text-center">
             <Link
-              href="/auth/login"
+              href="/auth/signin"
               className="text-sm text-primary hover:text-primary/80 transition-colors inline-flex items-center gap-1"
             >
               <ArrowLeft className="w-3 h-3" />

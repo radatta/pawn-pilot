@@ -16,6 +16,7 @@ import { GameControls } from "@/components/game-controls";
 
 import { getBestMove, terminateEngine } from "@/lib/engine/stockfish";
 import { useReviewableGame } from "@/lib/hooks/useReviewableGame";
+import { GameResult } from "../api/games/[gameId]/route";
 
 interface FormattedMove {
   moveNumber: number;
@@ -50,6 +51,7 @@ export default function PlayPage() {
   const [flippedBoard, setFlippedBoard] = useState(false);
   const [currentPlayer, setCurrentPlayer] = useState<"white" | "black">("white");
   const [analysis, setAnalysis] = useState("Start a new game to begin!");
+  const [gameResult, setGameResult] = useState<GameResult | null>(null);
 
   // Read ?gameId= from URL
   const searchParams = useSearchParams();
@@ -70,14 +72,19 @@ export default function PlayPage() {
         );
       } else if (newGame.isStalemate()) {
         setAnalysis("Draw by stalemate.");
+        setGameResult("draw");
       } else if (newGame.isThreefoldRepetition()) {
         setAnalysis("Draw by threefold repetition.");
+        setGameResult("threefold_repetition");
       } else if (newGame.isInsufficientMaterial()) {
         setAnalysis("Draw by insufficient material.");
+        setGameResult("insufficient_material");
       } else if (newGame.isDraw()) {
         setAnalysis("Draw.");
+        setGameResult("draw");
       } else {
         setAnalysis("Game over.");
+        setGameResult("draw");
       }
     }
 
@@ -119,17 +126,23 @@ export default function PlayPage() {
                   ? "Black wins by checkmate!"
                   : "White wins by checkmate!"
               );
+              setGameResult("checkmate");
             } else if (gameCopy.isStalemate()) {
               setAnalysis("Draw by stalemate.");
+              setGameResult("stalemate");
             } else if (gameCopy.isThreefoldRepetition()) {
               setAnalysis("Draw by threefold repetition.");
+              setGameResult("threefold_repetition");
             } else if (gameCopy.isInsufficientMaterial()) {
               setAnalysis("Draw by insufficient material.");
+              setGameResult("insufficient_material");
             } else if (gameCopy.isDraw()) {
               setAnalysis("Draw.");
+              setGameResult("draw");
             } else {
               setAnalysis("Game over.");
             }
+            handleCompleteGame();
           }
         } catch (err) {
           toast.error(err instanceof Error ? err.message : "An error occurred");
@@ -171,9 +184,26 @@ export default function PlayPage() {
       await fetch(`/api/games/${gameId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "resigned" }),
+        body: JSON.stringify({ status: { completed: true }, result: { resigned: true } }),
       });
       setAnalysis("Game resigned. Don't worry - every game is a learning opportunity!");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "An error occurred");
+    }
+  };
+
+  const handleCompleteGame = async () => {
+    if (!gameId) return;
+    try {
+      await fetch(`/api/games/${gameId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: { completed: true },
+          result: gameResult,
+        }),
+      });
+      setAnalysis("Game completed. Congratulations!");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "An error occurred");
     }

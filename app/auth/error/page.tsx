@@ -34,7 +34,7 @@ export default function AuthErrorPage() {
               </Button>
 
               <Button variant="outline" asChild className="w-full">
-                <Link href="/auth/login">Try Sign In Again</Link>
+                <Link href="/auth/signin">Try Sign In Again</Link>
               </Button>
             </div>
           </CardContent>
