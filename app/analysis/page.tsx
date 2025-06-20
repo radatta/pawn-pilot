@@ -32,6 +32,7 @@ function formatMoveHistory(history: string[]): FormattedMove[] {
 }
 
 export default function AnalysisPage() {
+  const [isLoading, setIsLoading] = useState(true);
   const searchParams = useSearchParams();
   const gameId = searchParams.get("gameId");
 
@@ -44,9 +45,18 @@ export default function AnalysisPage() {
 
   const moveHistory = formatMoveHistory(game.history());
   const arrows = useMemo(() => {
-    if (!bestMove || bestMove.length < 4) return undefined;
-    const from = bestMove.slice(0, 2) as Square;
-    const to = bestMove.slice(2, 4) as Square;
+    // Only draw an arrow when the engine provides a standard LAN move (e.g. "e2e4" or "e7e8q").
+    // Stockfish returns "(none)" when no legal moves are available which would otherwise
+    // produce invalid square coordinates and trigger React warnings (NaN SVG attributes).
+    if (!bestMove) return undefined;
+
+    // Match the first four characters representing the from and to squares.
+    // This covers normal moves ("e2e4") as well as promotions ("e7e8q").
+    const match = bestMove.match(/^([a-h][1-8])([a-h][1-8])/);
+    if (!match) return undefined;
+
+    const from = match[1] as Square;
+    const to = match[2] as Square;
     return [[from, to, "rgb(0,128,0)"] as [Square, Square, string]];
   }, [bestMove]);
 
@@ -96,6 +106,7 @@ export default function AnalysisPage() {
         const loaded = new Chess();
         if (data.pgn) loaded.loadPgn(data.pgn);
         setGame(loaded);
+        setIsLoading(false);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "An error occurred");
       }
@@ -131,23 +142,28 @@ export default function AnalysisPage() {
       </header>
 
       {/* Main Content */}
-      <div className="flex h-[calc(100vh-4rem)]">
-        {/* Main Panel - Chessboard */}
-        <div className="flex-1 flex items-center justify-center p-6 bg-gradient-to-br from-background to-muted/30">
-          <div className="w-full max-w-2xl">
-            <Chessboard game={game} setGame={(g) => setGame(g)} arrows={arrows} />
+      {isLoading && (
+        <div className="flex items-center justify-center h-full">Loading...</div>
+      )}
+      {!isLoading && (
+        <div className="flex h-[calc(100vh-4rem)]">
+          {/* Main Panel - Chessboard */}
+          <div className="flex-1 flex items-center justify-center p-6 bg-gradient-to-br from-background to-muted/30">
+            <div className="w-full max-w-2xl">
+              <Chessboard game={game} setGame={(g) => setGame(g)} arrows={arrows} />
+            </div>
+          </div>
+
+          {/* Sidebar Panel */}
+          <div className="w-80 border-l bg-card/30 backdrop-blur-sm p-6 space-y-6 overflow-y-auto">
+            {/* Move History */}
+            <MoveHistory moves={moveHistory} />
+
+            {/* AI Analysis */}
+            <AIAnalysis analysis={analysis} isThinking={isThinking} />
           </div>
         </div>
-
-        {/* Sidebar Panel */}
-        <div className="w-80 border-l bg-card/30 backdrop-blur-sm p-6 space-y-6 overflow-y-auto">
-          {/* Move History */}
-          <MoveHistory moves={moveHistory} />
-
-          {/* AI Analysis */}
-          <AIAnalysis analysis={analysis} isThinking={isThinking} />
-        </div>
-      </div>
+      )}
     </div>
   );
 }
