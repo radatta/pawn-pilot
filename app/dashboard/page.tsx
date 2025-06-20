@@ -66,9 +66,14 @@ export default async function DashboardPage() {
                   <span>{new Date(game.created_at).toLocaleDateString()}</span>
                   <span>{game.status}</span>
                   <span>{game.result || "-"}</span>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href={`/play?gameId=${game.id}`}>Review</Link>
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" asChild>
+                      <Link href={`/play?gameId=${game.id}`}>Continue</Link>
+                    </Button>
+                    <Button variant="ghost" size="sm" asChild>
+                      <Link href={`/analysis?gameId=${game.id}`}>Review</Link>
+                    </Button>
+                  </div>
                 </div>
               ))
             ) : (
