@@ -1,9 +1,8 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
 import { AuthButton } from "@/components/auth-button";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { createClient } from "@/lib/supabase/server";
 
 interface Game {
   id: string;
@@ -19,17 +18,18 @@ export default async function DashboardPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    return redirect("/login");
-  }
-
-  // This fetch call is made server-side, so it can securely use cookies
-  // to call our own API, which in turn calls Supabase.
-  const { data: games, error } = await supabase
+  const { data, error } = await supabase
     .from("games")
     .select("id, created_at, result, status")
-    .eq("user_id", user.id)
+    .eq("user_id", user?.id)
     .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error(error);
+    throw new Error(error.message);
+  }
+
+  const games: Game[] = data;
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -74,11 +74,6 @@ export default async function DashboardPage() {
             ) : (
               <div className="p-4 text-center text-muted-foreground">
                 You have not played any games yet.
-              </div>
-            )}
-            {error && (
-              <div className="p-4 text-center text-destructive">
-                Error loading games: {error.message}
               </div>
             )}
           </div>

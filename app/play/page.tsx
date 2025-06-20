@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Crown, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,7 @@ function formatMoveHistory(history: ChessMove[]): FormattedMove[] {
 }
 
 export default function PlayPage() {
+  const router = useRouter();
   const [game, setGame] = useState(new Chess());
   const [gameId, setGameId] = useState<string | null>(null);
   const [flippedBoard, setFlippedBoard] = useState(false);
@@ -103,6 +104,8 @@ export default function PlayPage() {
       }
       setGame(newGameInstance);
       setCurrentPlayer("white");
+      // Update URL so refresh stays in the same game
+      router.replace(`/play?gameId=${newGameData.id}`);
       setAnalysis(
         "Welcome to a new game! Start with a strong opening move like 1.e4 or 1.d4 to control the center."
       );

@@ -87,6 +87,15 @@ PawnPilot is an AI-powered chess improvement platform designed for players who w
 
 ---
 
+## Architectural Principles
+
+1. No supabase client-side calls - either API or RSC on page load call. It's oaky to loveral HTTP methods in api calls for the same route if it makes sesne
+2. Do not check for authentication anywhere since the middleware manages auth
+3. always make optimistic UI updates
+4. all UI must be consistent
+
+---
+
 ## Why PawnPilot?
 
 - **Solo Focus:** No distractions—just you and the AI, learning at your own pace.
