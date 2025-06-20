@@ -123,7 +123,7 @@ export const LoginForm = () => {
               Forgot Password?
             </Link>
             <Link
-              href="/auth/sign-up"
+              href="/auth/signup"
               className="text-primary hover:text-primary/80 transition-colors"
             >
               Don&apos;t have an account? Sign Up

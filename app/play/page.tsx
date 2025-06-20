@@ -54,6 +54,25 @@ export default function PlayPage() {
     // Optimistically update UI first
     setGame(newGame);
 
+    // Check for game over and set analysis message
+    if (newGame.isGameOver()) {
+      if (newGame.isCheckmate()) {
+        setAnalysis(
+          newGame.turn() === "w" ? "Black wins by checkmate!" : "White wins by checkmate!"
+        );
+      } else if (newGame.isStalemate()) {
+        setAnalysis("Draw by stalemate.");
+      } else if (newGame.isThreefoldRepetition()) {
+        setAnalysis("Draw by threefold repetition.");
+      } else if (newGame.isInsufficientMaterial()) {
+        setAnalysis("Draw by insufficient material.");
+      } else if (newGame.isDraw()) {
+        setAnalysis("Draw.");
+      } else {
+        setAnalysis("Game over.");
+      }
+    }
+
     // Persist to backend (fire-and-forget)
     if (!gameId) return;
     fetch(`/api/games/${gameId}`, {
@@ -84,6 +103,26 @@ export default function PlayPage() {
           const promotion = uci.length === 5 ? uci[4] : undefined;
           gameCopy.move({ from, to, promotion });
           updateGame(gameCopy);
+          // After AI move, check for game over and set analysis if needed
+          if (gameCopy.isGameOver()) {
+            if (gameCopy.isCheckmate()) {
+              setAnalysis(
+                gameCopy.turn() === "w"
+                  ? "Black wins by checkmate!"
+                  : "White wins by checkmate!"
+              );
+            } else if (gameCopy.isStalemate()) {
+              setAnalysis("Draw by stalemate.");
+            } else if (gameCopy.isThreefoldRepetition()) {
+              setAnalysis("Draw by threefold repetition.");
+            } else if (gameCopy.isInsufficientMaterial()) {
+              setAnalysis("Draw by insufficient material.");
+            } else if (gameCopy.isDraw()) {
+              setAnalysis("Draw.");
+            } else {
+              setAnalysis("Game over.");
+            }
+          }
         } catch (err) {
           toast.error(err instanceof Error ? err.message : "An error occurred");
           if (err instanceof Error && err.message === "WASM not supported") {
