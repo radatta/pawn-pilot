@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import toast from "react-hot-toast";
 
 export const LoginForm = () => {
   const [email, setEmail] = useState("");
@@ -33,11 +34,17 @@ export const LoginForm = () => {
         email,
         password,
       });
-      if (error) throw error;
+      if (error) {
+        if (error.code === "invalid_credentials") {
+          toast.error("Invalid email or password");
+        } else {
+          toast.error(error.message);
+        }
+        return;
+      }
       router.push("/dashboard");
     } catch (error: unknown) {
-      console.error(error);
-      throw error;
+      toast.error(error instanceof Error ? error.message : "An error occurred");
     } finally {
       setIsLoading(false);
     }

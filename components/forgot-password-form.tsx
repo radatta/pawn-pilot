@@ -16,6 +16,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/client";
+import toast from "react-hot-toast";
 
 export const ForgotPasswordForm = () => {
   const [email, setEmail] = useState("");
@@ -33,8 +34,7 @@ export const ForgotPasswordForm = () => {
       if (error) throw error;
       setIsSubmitted(true);
     } catch (error: unknown) {
-      console.error(error);
-      throw error;
+      toast.error(error instanceof Error ? error.message : "An error occurred");
     } finally {
       setIsLoading(false);
     }

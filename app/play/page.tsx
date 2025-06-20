@@ -4,13 +4,16 @@ import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Crown, ArrowLeft } from "lucide-react";
+import { Chess, Move as ChessMove } from "chess.js";
+import toast from "react-hot-toast";
+
 import { Button } from "@/components/ui/button";
 import { Chessboard } from "@/components/chessboard";
 import { GameStatus } from "@/components/game-status";
 import { MoveHistory } from "@/components/move-history";
 import { AIAnalysis } from "@/components/ai-analysis";
 import { GameControls } from "@/components/game-controls";
-import { Chess, Move as ChessMove } from "chess.js";
+
 import { getBestMove, terminateEngine } from "@/lib/engine/stockfish";
 
 interface FormattedMove {
@@ -57,7 +60,9 @@ export default function PlayPage() {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ pgn: newGame.pgn() }),
-    }).catch((err) => console.error("Failed to persist game:", err));
+    }).catch((err) =>
+      toast.error(err instanceof Error ? err.message : "An error occurred")
+    );
   };
 
   // Effect to handle AI moves
@@ -80,11 +85,9 @@ export default function PlayPage() {
           gameCopy.move({ from, to, promotion });
           updateGame(gameCopy);
         } catch (err) {
-          console.error("Engine error", err);
+          toast.error(err instanceof Error ? err.message : "An error occurred");
           if (err instanceof Error && err.message === "WASM not supported") {
-            alert(
-              "Web assembly threads are not supported in this browser, please update or switch the browser"
-            );
+            toast.error("Stockfish is not supported on this browser");
           }
         }
       }, thinkTime);
@@ -110,7 +113,7 @@ export default function PlayPage() {
         "Welcome to a new game! Start with a strong opening move like 1.e4 or 1.d4 to control the center."
       );
     } catch (error) {
-      console.error("Error starting new game:", error);
+      toast.error(error instanceof Error ? error.message : "An error occurred");
       setAnalysis("Could not start a new game. Please try again.");
     }
   };
@@ -125,7 +128,7 @@ export default function PlayPage() {
       });
       setAnalysis("Game resigned. Don't worry - every game is a learning opportunity!");
     } catch (error) {
-      console.error("Failed to resign:", error);
+      toast.error(error instanceof Error ? error.message : "An error occurred");
     }
   };
 
@@ -148,7 +151,7 @@ export default function PlayPage() {
       setCurrentPlayer(loadedGame.turn() === "w" ? "white" : "black");
       setAnalysis("Reviewing saved game. Continue playing or explore moves.");
     } catch (err) {
-      console.error(err);
+      toast.error(err instanceof Error ? err.message : "An error occurred");
       // fallback to new game
       handleNewGame();
     }

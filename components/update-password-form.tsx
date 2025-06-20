@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import toast from "react-hot-toast";
 
 export const UpdatePasswordForm = () => {
   const [password, setPassword] = useState("");
@@ -33,8 +34,7 @@ export const UpdatePasswordForm = () => {
       if (error) throw error;
       router.push("/dashboard");
     } catch (error: unknown) {
-      console.error(error);
-      throw error;
+      toast.error(error instanceof Error ? error.message : "An error occurred");
     } finally {
       setIsLoading(false);
     }

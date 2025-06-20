@@ -3,6 +3,7 @@ import { ThemeSwitcher } from "@/components/theme-switcher";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/server";
+import toast from "react-hot-toast";
 
 interface Game {
   id: string;
@@ -25,11 +26,10 @@ export default async function DashboardPage() {
     .order("created_at", { ascending: false });
 
   if (error) {
-    console.error(error);
-    throw new Error(error.message);
+    toast.error(error instanceof Error ? error.message : "An error occurred");
   }
 
-  const games: Game[] = data;
+  const games: Game[] = data || [];
 
   return (
     <div className="flex flex-col min-h-screen">

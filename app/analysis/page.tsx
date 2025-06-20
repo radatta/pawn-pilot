@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Crown, ArrowLeft } from "lucide-react";
 import { Chess, Square } from "chess.js";
+import toast from "react-hot-toast";
 
 import { Chessboard } from "@/components/chessboard";
 import { MoveHistory } from "@/components/move-history";
@@ -71,7 +72,7 @@ export default function AnalysisPage() {
         }
         setBestMove(result.bestMove);
       } catch (err) {
-        console.error(err);
+        toast.error(err instanceof Error ? err.message : "An error occurred");
         if (!canceled) setAnalysis("Engine error");
       } finally {
         if (!canceled) setIsThinking(false);
@@ -96,7 +97,7 @@ export default function AnalysisPage() {
         if (data.pgn) loaded.loadPgn(data.pgn);
         setGame(loaded);
       } catch (e) {
-        console.error(e);
+        toast.error(e instanceof Error ? e.message : "An error occurred");
       }
     }
     if (gameId) {

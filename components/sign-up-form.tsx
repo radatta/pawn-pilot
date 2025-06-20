@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import toast from "react-hot-toast";
 
 export const SignUpForm = () => {
   const [email, setEmail] = useState("");
@@ -39,8 +40,7 @@ export const SignUpForm = () => {
       if (error) throw error;
       router.push("/auth/sign-up-success");
     } catch (error: unknown) {
-      console.error(error);
-      throw error;
+      toast.error(error instanceof Error ? error.message : "An error occurred");
     } finally {
       setIsLoading(false);
     }
