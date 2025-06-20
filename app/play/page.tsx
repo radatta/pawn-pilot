@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Crown, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,10 @@ export default function PlayPage() {
   const [flippedBoard, setFlippedBoard] = useState(false);
   const [currentPlayer, setCurrentPlayer] = useState<"white" | "black">("white");
   const [analysis, setAnalysis] = useState("Start a new game to begin!");
+
+  // Read ?gameId= from URL
+  const searchParams = useSearchParams();
+  const urlGameId = searchParams.get("gameId");
 
   const moveHistory = formatMoveHistory(game.history({ verbose: true }));
 
@@ -113,10 +118,35 @@ export default function PlayPage() {
     setFlippedBoard(!flippedBoard);
   };
 
-  // Automatically start a new game on component mount
+  // Load existing game if id in URL, else start new
+  const loadGame = async (id: string) => {
+    try {
+      const res = await fetch(`/api/games/${id}`);
+      if (!res.ok) throw new Error("Game not found");
+      const data = await res.json();
+      setGameId(data.id);
+      const loadedGame = new Chess();
+      if (data.pgn) {
+        loadedGame.loadPgn(data.pgn);
+      }
+      setGame(loadedGame);
+      setCurrentPlayer(loadedGame.turn() === "w" ? "white" : "black");
+      setAnalysis("Reviewing saved game. Continue playing or explore moves.");
+    } catch (err) {
+      console.error(err);
+      // fallback to new game
+      handleNewGame();
+    }
+  };
+
   useEffect(() => {
-    handleNewGame();
-  }, []);
+    if (urlGameId) {
+      loadGame(urlGameId);
+    } else {
+      handleNewGame();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlGameId]);
 
   return (
     <div className="min-h-screen bg-background">

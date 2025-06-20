@@ -17,7 +17,7 @@ export async function GET(
     const { data, error } = await supabase
         .from("games")
         .select("*")
-        .eq("id", params.gameId)
+        .eq("id", (await params).gameId)
         .eq("user_id", user.id)
         .single();
 
@@ -54,7 +54,7 @@ export async function PUT(
     const { data: game, error: fetchError } = await supabase
         .from("games")
         .select("id")
-        .eq("id", params.gameId)
+        .eq("id", (await params).gameId)
         .eq("user_id", user.id)
         .single();
 
@@ -66,7 +66,7 @@ export async function PUT(
     const { data, error } = await supabase
         .from("games")
         .update({ pgn, status })
-        .eq("id", params.gameId)
+        .eq("id", (await params).gameId)
         .select()
         .single();
 
