@@ -16,7 +16,7 @@ const GameResultSchema = z.enum([
 export type GameResult = z.infer<typeof GameResultSchema>;
 
 const BodySchema = z.object({
-    pgn: z.string(),
+    pgn: z.string().optional(),
     status: GameStatusSchema.optional(),
     result: GameResultSchema.optional(),
 });

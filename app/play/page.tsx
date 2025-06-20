@@ -103,7 +103,7 @@ export default function PlayPage() {
   useEffect(() => {
     setCurrentPlayer(game.turn() === "w" ? "white" : "black");
 
-    if (game.turn() === "b" && !game.isGameOver() && gameId) {
+    if (game.turn() === "b" && gameResult === null && gameId) {
       const thinkTime = 500 + Math.random() * 500;
 
       setTimeout(async () => {
@@ -186,7 +186,7 @@ export default function PlayPage() {
       await fetch(`/api/games/${gameId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: { completed: true }, result: { resigned: true } }),
+        body: JSON.stringify({ status: "completed", result: "resigned" }),
       });
       setAnalysis("Game resigned. Don't worry - every game is a learning opportunity!");
       // Mark game as completed locally so post-game actions appear.
@@ -224,6 +224,9 @@ export default function PlayPage() {
       if (!res.ok) throw new Error("Game not found");
       const data = await res.json();
       setGameId(data.id);
+      if (data.status === "completed") {
+        setGameResult(data.result);
+      }
       const loadedGame = new Chess();
       if (data.pgn) {
         loadedGame.loadPgn(data.pgn);
@@ -294,7 +297,12 @@ export default function PlayPage() {
         {/* Main Panel - Chessboard */}
         <div className="flex-1 flex items-center justify-center p-6 bg-gradient-to-br from-background to-muted/30">
           <div className="w-full max-w-2xl">
-            <Chessboard game={game} setGame={updateGame} flipped={flippedBoard} />
+            <Chessboard
+              game={game}
+              setGame={updateGame}
+              flipped={flippedBoard}
+              disabled={gameResult !== null}
+            />
           </div>
         </div>
 

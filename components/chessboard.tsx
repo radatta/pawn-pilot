@@ -7,9 +7,16 @@ interface ChessboardProps {
   setGame: (game: Chess) => void;
   flipped?: boolean;
   arrows?: [Square, Square, string][];
+  disabled?: boolean;
 }
 
-export function Chessboard({ game, setGame, flipped = false, arrows }: ChessboardProps) {
+export function Chessboard({
+  game,
+  setGame,
+  flipped = false,
+  arrows,
+  disabled = false,
+}: ChessboardProps) {
   // Kludgy fix for initial hydration mismatch because react-chessboard
   // is not SSR-friendly.
   const [isMounted, setIsMounted] = useState(false);
@@ -31,6 +38,8 @@ export function Chessboard({ game, setGame, flipped = false, arrows }: Chessboar
 
   // --- Drag-and-drop handler ---
   function onDrop(sourceSquare: string, targetSquare: string) {
+    if (disabled) return false;
+
     // Create a new instance and load the PGN to preserve history
     const gameCopy = new Chess();
     gameCopy.loadPgn(game.pgn());
@@ -56,6 +65,7 @@ export function Chessboard({ game, setGame, flipped = false, arrows }: Chessboar
 
   // --- Click handlers ---
   function onPieceClick(piece: string, square: string) {
+    if (disabled) return;
     const turn = game.turn();
     if (
       (turn === "w" && piece.startsWith("w")) ||
@@ -72,6 +82,7 @@ export function Chessboard({ game, setGame, flipped = false, arrows }: Chessboar
   }
 
   function onSquareClick(square: string, piece?: string) {
+    if (disabled) return;
     if (selectedSquare === square) {
       setSelectedSquare(null);
       setLegalMoves([]);
@@ -130,6 +141,7 @@ export function Chessboard({ game, setGame, flipped = false, arrows }: Chessboar
         onSquareClick={onSquareClick}
         customSquareStyles={customSquareStyles}
         customArrows={arrows}
+        arePiecesDraggable={!disabled}
       />
     </div>
   );
