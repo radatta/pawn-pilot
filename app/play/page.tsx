@@ -11,6 +11,7 @@ import { MoveHistory } from "@/components/move-history";
 import { AIAnalysis } from "@/components/ai-analysis";
 import { GameControls } from "@/components/game-controls";
 import { Chess, Move as ChessMove } from "chess.js";
+import { getBestMove } from "@/lib/engine/stockfish";
 
 interface FormattedMove {
   moveNumber: number;
@@ -65,14 +66,25 @@ export default function PlayPage() {
     if (game.turn() === "b" && !game.isGameOver() && gameId) {
       const thinkTime = 500 + Math.random() * 500;
 
-      setTimeout(() => {
+      setTimeout(async () => {
         const gameCopy = new Chess();
         gameCopy.loadPgn(game.pgn());
-        const moves = gameCopy.moves();
-        if (moves.length > 0) {
-          const randomMove = moves[Math.floor(Math.random() * moves.length)];
-          gameCopy.move(randomMove);
+
+        try {
+          const uci = await getBestMove(gameCopy.fen());
+          // parse UCI, e.g., e2e4 or e7e8q
+          const from = uci.slice(0, 2);
+          const to = uci.slice(2, 4);
+          const promotion = uci.length === 5 ? uci[4] : undefined;
+          gameCopy.move({ from, to, promotion });
           updateGame(gameCopy);
+        } catch (err) {
+          console.error("Engine error", err);
+          if (err instanceof Error && err.message === "WASM not supported") {
+            alert(
+              "Web assembly threads are not supported in this browser, please update or switch the browser"
+            );
+          }
         }
       }, thinkTime);
     }
