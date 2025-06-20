@@ -33,7 +33,6 @@ function formatMoveHistory(history: string[]): FormattedMove[] {
 }
 
 export default function AnalysisPage() {
-  const [isLoading, setIsLoading] = useState(true);
   const searchParams = useSearchParams();
   const gameId = searchParams.get("gameId");
 
@@ -131,7 +130,6 @@ export default function AnalysisPage() {
         const loaded = new Chess();
         if (data.pgn) loaded.loadPgn(data.pgn);
         updateGameExternal(loaded);
-        setIsLoading(false);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "An error occurred");
       }
@@ -167,28 +165,22 @@ export default function AnalysisPage() {
       </header>
 
       {/* Main Content */}
-      {isLoading && (
-        <div className="flex items-center justify-center h-full">Loading...</div>
-      )}
-      {!isLoading && (
-        <div className="flex h-[calc(100vh-4rem)]">
-          {/* Main Panel - Chessboard */}
-          <div className="flex-1 flex items-center justify-center p-6 bg-gradient-to-br from-background to-muted/30">
-            <div className="w-full max-w-2xl">
-              <Chessboard game={game} setGame={updateGameExternal} arrows={arrows} />
-            </div>
-          </div>
-
-          {/* Sidebar Panel */}
-          <div className="w-80 border-l bg-card/30 backdrop-blur-sm p-6 space-y-6 overflow-y-auto">
-            {/* Move History */}
-            <MoveHistory moves={moveHistory} currentPly={currentPly} onSelect={goToPly} />
-
-            {/* AI Analysis */}
-            <AIAnalysis analysis={analysis} isThinking={isThinking} />
+      <div className="flex h-[calc(100vh-4rem)]">
+        <div className="flex-1 flex items-center justify-center p-6 bg-gradient-to-br from-background to-muted/30">
+          <div className="w-full max-w-2xl">
+            <Chessboard game={game} setGame={updateGameExternal} arrows={arrows} />
           </div>
         </div>
-      )}
+
+        {/* Sidebar Panel */}
+        <div className="w-80 border-l bg-card/30 backdrop-blur-sm p-6 space-y-6 overflow-y-auto">
+          {/* Move History */}
+          <MoveHistory moves={moveHistory} currentPly={currentPly} onSelect={goToPly} />
+
+          {/* AI Analysis */}
+          <AIAnalysis analysis={analysis} isThinking={isThinking} />
+        </div>
+      </div>
     </div>
   );
 }

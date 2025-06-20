@@ -172,6 +172,8 @@ export default function PlayPage() {
       setAnalysis(
         "Welcome to a new game! Start with a strong opening move like 1.e4 or 1.d4 to control the center."
       );
+      // Reset previous game result so post-game actions disappear.
+      setGameResult(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "An error occurred");
       setAnalysis("Could not start a new game. Please try again.");
@@ -187,6 +189,8 @@ export default function PlayPage() {
         body: JSON.stringify({ status: { completed: true }, result: { resigned: true } }),
       });
       setAnalysis("Game resigned. Don't worry - every game is a learning opportunity!");
+      // Mark game as completed locally so post-game actions appear.
+      setGameResult("resigned");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "An error occurred");
     }
@@ -315,6 +319,13 @@ export default function PlayPage() {
             onResign={handleResign}
             onFlipBoard={handleFlipBoard}
           />
+
+          {/* Post-game Actions */}
+          {gameResult && gameId && (
+            <Button asChild size="sm" className="w-full">
+              <Link href={`/analysis?gameId=${gameId}`}>Go to Analysis</Link>
+            </Button>
+          )}
         </div>
       </div>
     </div>
