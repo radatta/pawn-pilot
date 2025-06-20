@@ -16,7 +16,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import toast from "react-hot-toast";
 
 export const SignUpForm = () => {
@@ -28,16 +27,18 @@ export const SignUpForm = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    const supabase = createClient();
     try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/protected`,
-        },
+      const response = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
       });
-      if (error) throw error;
+
+      if (!response.ok) {
+        const { error } = await response.json();
+        throw new Error(error ?? "Unable to sign up");
+      }
+
       router.push("/auth/signup-success");
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "An error occurred");
