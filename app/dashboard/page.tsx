@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
 import { AuthButton } from "@/components/auth-button";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import Link from "next/link";
@@ -14,11 +15,20 @@ interface Game {
 export default async function DashboardPage() {
   const supabase = await createClient();
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return redirect("/login");
+  }
+
   // This fetch call is made server-side, so it can securely use cookies
   // to call our own API, which in turn calls Supabase.
   const { data: games, error } = await supabase
     .from("games")
     .select("id, created_at, result, status")
+    .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
   return (

@@ -40,18 +40,17 @@ export default function PlayPage() {
   const moveHistory = formatMoveHistory(game.history({ verbose: true }));
 
   // Function to update game state via API
-  const updateGame = async (newGame: Chess) => {
+  const updateGame = (newGame: Chess) => {
+    // Optimistically update UI first
+    setGame(newGame);
+
+    // Persist to backend (fire-and-forget)
     if (!gameId) return;
-    try {
-      await fetch(`/api/games/${gameId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pgn: newGame.pgn() }),
-      });
-      setGame(newGame);
-    } catch (error) {
-      console.error("Failed to update game:", error);
-    }
+    fetch(`/api/games/${gameId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pgn: newGame.pgn() }),
+    }).catch((err) => console.error("Failed to persist game:", err));
   };
 
   // Effect to handle AI moves
@@ -61,14 +60,14 @@ export default function PlayPage() {
     if (game.turn() === "b" && !game.isGameOver() && gameId) {
       const thinkTime = 500 + Math.random() * 500;
 
-      setTimeout(async () => {
+      setTimeout(() => {
         const gameCopy = new Chess();
         gameCopy.loadPgn(game.pgn());
         const moves = gameCopy.moves();
         if (moves.length > 0) {
           const randomMove = moves[Math.floor(Math.random() * moves.length)];
           gameCopy.move(randomMove);
-          await updateGame(gameCopy);
+          updateGame(gameCopy);
         }
       }, thinkTime);
     }
