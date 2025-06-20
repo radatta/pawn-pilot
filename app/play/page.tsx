@@ -11,7 +11,7 @@ import { MoveHistory } from "@/components/move-history";
 import { AIAnalysis } from "@/components/ai-analysis";
 import { GameControls } from "@/components/game-controls";
 import { Chess, Move as ChessMove } from "chess.js";
-import { getBestMove } from "@/lib/engine/stockfish";
+import { getBestMove, terminateEngine } from "@/lib/engine/stockfish";
 
 interface FormattedMove {
   moveNumber: number;
@@ -159,6 +159,13 @@ export default function PlayPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlGameId]);
+
+  // Cleanup Stockfish worker when leaving the page
+  useEffect(() => {
+    return () => {
+      terminateEngine();
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">
