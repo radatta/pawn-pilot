@@ -12,6 +12,7 @@ import { MoveHistory } from "@/components/move-history";
 import { AIAnalysis } from "@/components/ai-analysis";
 import { Button } from "@/components/ui/button";
 import { analyzePosition, AnalysisResult, terminateEngine } from "@/lib/engine/stockfish";
+import { useReviewableGame } from "@/lib/hooks/useReviewableGame";
 
 interface FormattedMove {
   moveNumber: number;
@@ -36,14 +37,23 @@ export default function AnalysisPage() {
   const searchParams = useSearchParams();
   const gameId = searchParams.get("gameId");
 
-  const [game, setGame] = useState(() => new Chess());
+  const {
+    game,
+    updateGameExternal,
+    stepBackward,
+    stepForward,
+    goToPly,
+    fullSanHistory,
+    currentPly,
+  } = useReviewableGame();
+
   const [analysis, setAnalysis] = useState<string>(
     "Load a game or start exploring to begin analysis."
   );
   const [isThinking, setIsThinking] = useState(false);
   const [bestMove, setBestMove] = useState<string | null>(null);
 
-  const moveHistory = formatMoveHistory(game.history());
+  const moveHistory = formatMoveHistory(fullSanHistory);
   const arrows = useMemo(() => {
     // Only draw an arrow when the engine provides a standard LAN move (e.g. "e2e4" or "e7e8q").
     // Stockfish returns "(none)" when no legal moves are available which would otherwise
@@ -59,6 +69,21 @@ export default function AnalysisPage() {
     const to = match[2] as Square;
     return [[from, to, "rgb(0,128,0)"] as [Square, Square, string]];
   }, [bestMove]);
+
+  // Listen for left / right arrow keys globally.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        stepBackward();
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        stepForward();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [stepBackward, stepForward]);
 
   // Evaluate position whenever game changes
   useEffect(() => {
@@ -105,7 +130,7 @@ export default function AnalysisPage() {
         const data = await res.json();
         const loaded = new Chess();
         if (data.pgn) loaded.loadPgn(data.pgn);
-        setGame(loaded);
+        updateGameExternal(loaded);
         setIsLoading(false);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "An error occurred");
@@ -114,7 +139,7 @@ export default function AnalysisPage() {
     if (gameId) {
       loadGame(gameId);
     }
-  }, [gameId]);
+  }, [gameId, updateGameExternal]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -150,14 +175,14 @@ export default function AnalysisPage() {
           {/* Main Panel - Chessboard */}
           <div className="flex-1 flex items-center justify-center p-6 bg-gradient-to-br from-background to-muted/30">
             <div className="w-full max-w-2xl">
-              <Chessboard game={game} setGame={(g) => setGame(g)} arrows={arrows} />
+              <Chessboard game={game} setGame={updateGameExternal} arrows={arrows} />
             </div>
           </div>
 
           {/* Sidebar Panel */}
           <div className="w-80 border-l bg-card/30 backdrop-blur-sm p-6 space-y-6 overflow-y-auto">
             {/* Move History */}
-            <MoveHistory moves={moveHistory} />
+            <MoveHistory moves={moveHistory} currentPly={currentPly} onSelect={goToPly} />
 
             {/* AI Analysis */}
             <AIAnalysis analysis={analysis} isThinking={isThinking} />

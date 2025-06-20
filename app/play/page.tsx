@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Crown, ArrowLeft } from "lucide-react";
-import { Chess, Move as ChessMove } from "chess.js";
+import { Chess } from "chess.js";
 import toast from "react-hot-toast";
 
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import { AIAnalysis } from "@/components/ai-analysis";
 import { GameControls } from "@/components/game-controls";
 
 import { getBestMove, terminateEngine } from "@/lib/engine/stockfish";
+import { useReviewableGame } from "@/lib/hooks/useReviewableGame";
 
 interface FormattedMove {
   moveNumber: number;
@@ -22,14 +23,13 @@ interface FormattedMove {
   black?: string;
 }
 
-// Function to format the history from chess.js
-function formatMoveHistory(history: ChessMove[]): FormattedMove[] {
+function formatMoveHistory(historySan: string[]): FormattedMove[] {
   const formatted: FormattedMove[] = [];
-  for (let i = 0; i < history.length; i += 2) {
+  for (let i = 0; i < historySan.length; i += 2) {
     formatted.push({
       moveNumber: i / 2 + 1,
-      white: history[i].san,
-      black: history[i + 1]?.san,
+      white: historySan[i] as string,
+      black: historySan[i + 1] as string | undefined,
     });
   }
   return formatted;
@@ -37,7 +37,15 @@ function formatMoveHistory(history: ChessMove[]): FormattedMove[] {
 
 export default function PlayPage() {
   const router = useRouter();
-  const [game, setGame] = useState(new Chess());
+  const {
+    game,
+    updateGameExternal,
+    stepBackward,
+    stepForward,
+    goToPly,
+    fullSanHistory,
+    currentPly,
+  } = useReviewableGame();
   const [gameId, setGameId] = useState<string | null>(null);
   const [flippedBoard, setFlippedBoard] = useState(false);
   const [currentPlayer, setCurrentPlayer] = useState<"white" | "black">("white");
@@ -47,12 +55,12 @@ export default function PlayPage() {
   const searchParams = useSearchParams();
   const urlGameId = searchParams.get("gameId");
 
-  const moveHistory = formatMoveHistory(game.history({ verbose: true }));
+  const moveHistory = formatMoveHistory(fullSanHistory);
 
   // Function to update game state via API
   const updateGame = (newGame: Chess) => {
     // Optimistically update UI first
-    setGame(newGame);
+    updateGameExternal(newGame);
 
     // Check for game over and set analysis message
     if (newGame.isGameOver()) {
@@ -144,7 +152,7 @@ export default function PlayPage() {
       if (newGameData.pgn) {
         newGameInstance.loadPgn(newGameData.pgn);
       }
-      setGame(newGameInstance);
+      updateGameExternal(newGameInstance);
       setCurrentPlayer("white");
       // Update URL so refresh stays in the same game
       router.replace(`/play?gameId=${newGameData.id}`);
@@ -186,7 +194,7 @@ export default function PlayPage() {
       if (data.pgn) {
         loadedGame.loadPgn(data.pgn);
       }
-      setGame(loadedGame);
+      updateGameExternal(loadedGame);
       setCurrentPlayer(loadedGame.turn() === "w" ? "white" : "black");
       setAnalysis("Reviewing saved game. Continue playing or explore moves.");
     } catch (err) {
@@ -211,6 +219,21 @@ export default function PlayPage() {
       terminateEngine();
     };
   }, []);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        stepBackward();
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        stepForward();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [stepBackward, stepForward]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -251,7 +274,7 @@ export default function PlayPage() {
           />
 
           {/* Move History */}
-          <MoveHistory moves={moveHistory} />
+          <MoveHistory moves={moveHistory} currentPly={currentPly} onSelect={goToPly} />
 
           {/* AI Analysis */}
           <AIAnalysis analysis={analysis} />
