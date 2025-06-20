@@ -46,34 +46,34 @@ PawnPilot is an AI-powered chess improvement platform designed for players who w
    - Create the main layout and navigation using shadcn UI and Tailwind CSS.
    - Develop reusable components: chessboard, move list, analysis panel, dashboard widgets.
 
-3. **Integrate Chess Engine & AI Services**
+3. **Implement User Authentication (Optional)**
+
+   - Add Supabase Auth for user accounts and secure data storage.
+
+4. **Integrate Chess Engine & AI Services**
 
    - Set up Stockfish (WASM) in the frontend or backend for move generation and analysis.
    - Connect to LLM APIs for generating move explanations and feedback.
 
-4. **Implement Game Logic & Adaptive Bot**
+5. **Implement Game Logic & Adaptive Bot**
 
    - Code game state management and move validation.
    - Develop the adaptive bot logic: adjust difficulty based on user performance and recent games.
 
-5. **Enable Real-Time Move Explanations & Hints**
+6. **Enable Real-Time Move Explanations & Hints**
 
    - Trigger AI explanations after each move.
    - Allow users to request hints or explore "what if" scenarios during play.
 
-6. **Build Post-Game Analysis & Training Tools**
+7. **Build Post-Game Analysis & Training Tools**
 
    - Analyze completed games for mistakes and generate personalized puzzles.
    - Summarize recurring weaknesses and suggest targeted training.
 
-7. **Develop Progress Dashboard & Analytics**
+8. **Develop Progress Dashboard & Analytics**
 
    - Aggregate user stats: accuracy, blunders, phase-by-phase strengths.
    - Visualize improvement trends and training milestones.
-
-8. **Implement User Authentication (Optional)**
-
-   - Add Supabase Auth for user accounts and secure data storage.
 
 9. **Test, Refine, and Iterate**
 
