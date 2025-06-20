@@ -16,10 +16,38 @@ const pendingMoveResolvers: Array<(best: string) => void> = [];
 // Resolvers waiting for analysis info callbacks.
 const infoCallbacks: Array<(info: ParsedInfo) => void> = [];
 
+// Track the current ELO limit set in the engine. null means full strength.
+let currentEloLimit: number | null = null;
+
 interface ParsedInfo {
     depth?: number;
     score?: { unit: "cp" | "mate"; value: number };
     pv?: string;
+}
+
+async function setStrength(elo: number | null) {
+    // No need to send commands if the state is already what we want.
+    if (currentEloLimit === elo) return;
+
+    // Engine must be initialized before setting options
+    if (!stockfishWorker) throw new Error("Engine not initialized");
+
+    if (elo === null) {
+        // Set to full strength for analysis
+        ready = false;
+        stockfishWorker!.postMessage("setoption name UCI_LimitStrength value false");
+        stockfishWorker!.postMessage("isready");
+        await waitUntilReady();
+        currentEloLimit = null;
+    } else {
+        // Set to a limited ELO for gameplay
+        ready = false;
+        stockfishWorker!.postMessage("setoption name UCI_LimitStrength value true");
+        stockfishWorker!.postMessage(`setoption name UCI_Elo value ${elo}`);
+        stockfishWorker!.postMessage("isready");
+        await waitUntilReady();
+        currentEloLimit = elo;
+    }
 }
 
 async function initEngine() {
@@ -87,6 +115,9 @@ export async function getBestMove(fen: string): Promise<string> {
     if (typeof window === "undefined") throw new Error("Engine can run only in browser");
 
     await initEngine();
+    // Set engine to a weaker playing strength.
+    // This will only send commands if the strength is not already set to this ELO.
+    await setStrength(600);
 
     // Prepare position and wait for the engine to acknowledge with `readyok`.
     ready = false;
@@ -107,8 +138,8 @@ export async function getBestMove(fen: string): Promise<string> {
             resolve(best);
         });
 
-        // Launch search – depth may be tweaked by caller later.
-        stockfishWorker.postMessage("go depth 12");
+        // Launch search – a lower depth makes for weaker play.
+        stockfishWorker.postMessage("go depth 1");
     });
 }
 
@@ -178,6 +209,9 @@ export async function analyzePosition(
     if (typeof window === "undefined") throw new Error("Engine can run only in browser");
 
     await initEngine();
+    // Set engine to full strength for analysis.
+    // This will only send commands if the strength is not already set to full.
+    await setStrength(null);
 
     // Prepare position and wait for the engine to acknowledge with `readyok`.
     ready = false;
