@@ -4,7 +4,7 @@ import type React from "react";
 
 import { useState } from "react";
 import Link from "next/link";
-import { Lock, CheckCircle } from "lucide-react";
+import { Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,48 +15,30 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
 
 export const UpdatePasswordForm = () => {
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isUpdated, setIsUpdated] = useState(false);
+  const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password !== confirmPassword) {
-      alert("Passwords don't match");
-      return;
-    }
+    const supabase = createClient();
     setIsLoading(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setIsLoading(false);
-    setIsUpdated(true);
+
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+      router.push("/dashboard");
+    } catch (error: unknown) {
+      console.error(error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
   };
-
-  if (isUpdated) {
-    return (
-      <Card className="bg-card/50 border-border backdrop-blur-sm">
-        <CardHeader className="text-center space-y-4">
-          <div className="mx-auto w-16 h-16 bg-emerald-500/10 rounded-full flex items-center justify-center">
-            <CheckCircle className="w-8 h-8 text-emerald-500" />
-          </div>
-          <CardTitle className="text-2xl font-bold">Password Updated</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6 text-center">
-          <p className="text-muted-foreground leading-relaxed">
-            Your password has been successfully updated. You can now sign in with your new
-            password.
-          </p>
-
-          <Button asChild className="w-full">
-            <Link href="/auth/login">Continue to Sign In</Link>
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
 
   return (
     <div>
@@ -68,7 +50,7 @@ export const UpdatePasswordForm = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleForgotPassword} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="password">New Password</Label>
               <div className="relative">
@@ -93,8 +75,8 @@ export const UpdatePasswordForm = () => {
                   id="confirmPassword"
                   type="password"
                   placeholder="Confirm your new password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   className="pl-10"
                   required
                 />

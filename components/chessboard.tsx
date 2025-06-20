@@ -6,9 +6,10 @@ interface ChessboardProps {
   game: Chess;
   setGame: (game: Chess) => void;
   flipped?: boolean;
+  arrows?: [Square, Square, string][];
 }
 
-export function Chessboard({ game, setGame, flipped = false }: ChessboardProps) {
+export function Chessboard({ game, setGame, flipped = false, arrows }: ChessboardProps) {
   // Kludgy fix for initial hydration mismatch because react-chessboard
   // is not SSR-friendly.
   const [isMounted, setIsMounted] = useState(false);
@@ -128,6 +129,7 @@ export function Chessboard({ game, setGame, flipped = false }: ChessboardProps) 
         onPieceClick={onPieceClick}
         onSquareClick={onSquareClick}
         customSquareStyles={customSquareStyles}
+        customArrows={arrows}
       />
     </div>
   );
