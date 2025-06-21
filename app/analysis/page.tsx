@@ -1,96 +1,50 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import Link from "next/link";
-import { Crown, ArrowLeft } from "lucide-react";
-import { Chess, Square } from "chess.js";
-import toast from "react-hot-toast";
-
+import { GameStatus } from "@/components/game-status";
 import { Chessboard } from "@/components/chessboard";
 import { MoveHistory } from "@/components/move-history";
 import { AIAnalysis } from "@/components/ai-analysis";
-import { Button } from "@/components/ui/button";
-import { GameStatus } from "@/components/game-status";
-import { analyzePosition, AnalysisResult, terminateEngine } from "@/lib/engine/stockfish";
+import { Square } from "chess.js";
+import { terminateEngine } from "@/lib/engine/stockfish";
 import { useReviewableGame } from "@/lib/hooks/useReviewableGame";
 import useSupabaseBrowser from "@/lib/supabase/client";
 import { useGameById } from "@/lib/queries/game-tanstack";
-
-interface FormattedMove {
-  moveNumber: number;
-  white: string;
-  black?: string;
-}
-
-function formatMoveHistory(history: string[]): FormattedMove[] {
-  const formatted: FormattedMove[] = [];
-  for (let i = 0; i < history.length; i += 2) {
-    formatted.push({
-      moveNumber: i / 2 + 1,
-      white: history[i] as string,
-      black: history[i + 1] as string | undefined,
-    });
-  }
-  return formatted;
-}
+import { useStockfishAnalysis } from "@/lib/hooks/useStockfishAnalysis";
+import { useChessClock } from "@/lib/hooks/useChessClock";
+import { formatMoveHistory } from "@/lib/utils/format-move-history";
+import { TwoPaneLayout } from "@/components/two-pane-layout";
+import { GameHeader } from "@/components/game-header";
 
 export default function AnalysisPage() {
   const searchParams = useSearchParams();
   const gameId = searchParams.get("gameId");
   const supabase = useSupabaseBrowser();
 
-  const {
-    game,
-    updateGameExternal,
-    stepBackward,
-    stepForward,
-    goToPly,
-    fullSanHistory,
-    currentPly,
-  } = useReviewableGame();
+  const { game, updateGameExternal, goToPly, fullSanHistory, currentPly, loadPGN } =
+    useReviewableGame();
 
-  const [analysis, setAnalysis] = useState<string>(
-    "Load a game or start exploring to begin analysis."
-  );
-  const [isThinking, setIsThinking] = useState(false);
-  const [bestMove, setBestMove] = useState<string | null>(null);
-  const [clockHistory, setClockHistory] = useState<{ white: number; black: number }[]>([
-    {
-      white: 300,
-      black: 300,
-    },
-  ]);
-  const [whiteTime, setWhiteTime] = useState(300);
-  const [blackTime, setBlackTime] = useState(300);
+  const clock = useChessClock({ start: 300, increment: 0 });
 
   const moveHistory = formatMoveHistory(fullSanHistory);
 
   // --------------------------------------------------------------------
   // Memoised FEN & normalisation helpers
   // --------------------------------------------------------------------
-  const fen = useMemo(() => game.fen(), [game]);
-  const normalisedFen = useMemo(() => fen.split(" ").slice(0, 4).join(" "), [fen]);
-
-  // Simple in-memory cache for analysis results keyed by normalised FEN.
-  const analysisCache = useRef<
-    Map<
-      string,
-      {
-        analysisText: string;
-        bestMove: string | null;
-      }
-    >
-  >(new Map());
+  const {
+    analysisText: analysis,
+    bestMove,
+    thinking: isThinking,
+  } = useStockfishAnalysis(game);
 
   // Update displayed time when currentPly changes
   useEffect(() => {
-    const entry = clockHistory[currentPly] ?? clockHistory[clockHistory.length - 1];
+    const entry = clock.history[currentPly] ?? clock.history[clock.history.length - 1];
     if (entry) {
-      setWhiteTime(entry.white);
-      setBlackTime(entry.black);
+      // load times in hook; nothing else needed
     }
-  }, [currentPly, clockHistory]);
+  }, [currentPly, clock.history]);
 
   const arrows = useMemo(() => {
     // Only draw an arrow when the engine provides a standard LAN move (e.g. "e2e4" or "e7e8q").
@@ -108,79 +62,6 @@ export default function AnalysisPage() {
     return [[from, to, "rgb(0,128,0)"] as [Square, Square, string]];
   }, [bestMove]);
 
-  // Listen for left / right arrow keys globally.
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        stepBackward();
-      } else if (e.key === "ArrowRight") {
-        e.preventDefault();
-        stepForward();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [stepBackward, stepForward]);
-
-  // --------------------------------------------------------------------
-  // Evaluate position whenever the POSITION (not the object) changes.
-  // Uses cache to avoid duplicate engine evaluation of identical FENs.
-  // --------------------------------------------------------------------
-  useEffect(() => {
-    let canceled = false;
-
-    // First, see if we already analysed this position.
-    const cached = analysisCache.current.get(normalisedFen);
-    if (cached) {
-      setAnalysis(cached.analysisText);
-      setBestMove(cached.bestMove);
-      return; // Skip expensive Stockfish call
-    }
-
-    async function evaluate() {
-      setIsThinking(true);
-      try {
-        const result: AnalysisResult = await analyzePosition(fen, 18);
-        if (canceled) return;
-
-        // Build human-readable analysis string.
-        let analysisText = "";
-        if (result.mateIn !== undefined) {
-          analysisText = `Mate in ${result.mateIn}`;
-        } else if (result.evaluationCp !== undefined) {
-          const evalScore = (game.turn() === "w" ? 1 : -1) * (result.evaluationCp / 100);
-          analysisText = `Eval: ${evalScore.toFixed(2)} | Depth: ${
-            result.depth
-          } | Best line: ${result.pv?.slice(0, 60)}...`;
-        } else {
-          analysisText = "Evaluation unavailable";
-        }
-
-        // Update state.
-        setAnalysis(analysisText);
-        setBestMove(result.bestMove);
-
-        // Cache for future visits.
-        analysisCache.current.set(normalisedFen, {
-          analysisText,
-          bestMove: result.bestMove,
-        });
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "An error occurred");
-        if (!canceled) setAnalysis("Engine error");
-      } finally {
-        if (!canceled) setIsThinking(false);
-      }
-    }
-
-    evaluate();
-
-    return () => {
-      canceled = true;
-    };
-  }, [normalisedFen, fen, game]);
-
   // ------------------------------------------------------------
   // React Query: load game data if gameId provided
   // ------------------------------------------------------------
@@ -190,12 +71,15 @@ export default function AnalysisPage() {
   useEffect(() => {
     if (!fetchedGame) return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const g: any = fetchedGame as any;
-    const loaded = new Chess();
-    if (g.pgn) loaded.loadPgn(g.pgn);
-    updateGameExternal(loaded);
-    if (g.clock_history) setClockHistory(g.clock_history);
-  }, [fetchedGame, updateGameExternal]);
+    const g: any = fetchedGame;
+    if (g.pgn) loadPGN(g.pgn);
+    clock.load({
+      white: g.white_time_remaining || 300,
+      black: g.black_time_remaining || 300,
+      clock_history: g.clock_history || undefined,
+      last_move_timestamp: g.last_move_timestamp || undefined,
+    });
+  }, [fetchedGame]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -204,51 +88,24 @@ export default function AnalysisPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="px-4 lg:px-6 h-16 flex items-center border-b bg-background/80 backdrop-blur-xl sticky top-0 z-50">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" asChild>
-            <Link href="/dashboard" className="flex items-center gap-2">
-              <ArrowLeft className="w-4 h-4" />
-              Back
-            </Link>
-          </Button>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-primary to-primary/80 rounded-xl flex items-center justify-center">
-              <Crown className="h-4 w-4 text-primary-foreground" />
-            </div>
-            <span className="text-xl font-semibold">PawnPilot Analysis</span>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <div className="flex h-[calc(100vh-4rem)]">
-        <div className="flex-1 flex items-center justify-center p-6 bg-gradient-to-br from-background to-muted/30">
-          <div className="w-full max-w-2xl">
-            <Chessboard game={game} setGame={updateGameExternal} arrows={arrows} />
-          </div>
-        </div>
-
-        {/* Sidebar Panel */}
-        <div className="w-96 border-l bg-card/30 backdrop-blur-sm p-6 space-y-6 overflow-y-auto">
-          {/* Clock Status */}
-          <GameStatus
-            currentPlayer={game.turn() === "w" ? "white" : "black"}
-            playerColor="white"
-            gameState="playing"
-            whiteTimeRemaining={whiteTime}
-            blackTimeRemaining={blackTime}
-            gameOver={true}
-          />
-
-          {/* Move History */}
-          <MoveHistory moves={moveHistory} currentPly={currentPly} onSelect={goToPly} />
-
-          {/* AI Analysis */}
-          <AIAnalysis analysis={analysis} isThinking={isThinking} />
-        </div>
-      </div>
+      <GameHeader backHref="/dashboard" title="PawnPilot Analysis" />
+      <TwoPaneLayout
+        board={<Chessboard game={game} setGame={updateGameExternal} arrows={arrows} />}
+        sidebar={
+          <>
+            <GameStatus
+              currentPlayer={game.turn() === "w" ? "white" : "black"}
+              playerColor="white"
+              gameState="playing"
+              whiteTimeRemaining={clock.white}
+              blackTimeRemaining={clock.black}
+              gameOver={true}
+            />
+            <MoveHistory moves={moveHistory} currentPly={currentPly} onSelect={goToPly} />
+            <AIAnalysis analysis={analysis} isThinking={isThinking} />
+          </>
+        }
+      />
     </div>
   );
 }

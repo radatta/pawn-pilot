@@ -3,11 +3,12 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Crown, ArrowLeft } from "lucide-react";
 import { Chess } from "chess.js";
 import toast from "react-hot-toast";
 import { useGameById, useCreateGame, useUpdateGame } from "@/lib/queries/game-tanstack";
 import useSupabaseBrowser from "@/lib/supabase/client";
+import { formatMoveHistory } from "@/lib/utils/format-move-history";
+import { GameHeader } from "@/components/game-header";
 
 import { Button } from "@/components/ui/button";
 import { Chessboard } from "@/components/chessboard";
@@ -19,24 +20,6 @@ import { GameControls } from "@/components/game-controls";
 import { getBestMove, terminateEngine } from "@/lib/engine/stockfish";
 import { useReviewableGame } from "@/lib/hooks/useReviewableGame";
 import { GameResult } from "../api/games/[gameId]/route";
-
-interface FormattedMove {
-  moveNumber: number;
-  white: string;
-  black?: string;
-}
-
-function formatMoveHistory(historySan: string[]): FormattedMove[] {
-  const formatted: FormattedMove[] = [];
-  for (let i = 0; i < historySan.length; i += 2) {
-    formatted.push({
-      moveNumber: i / 2 + 1,
-      white: historySan[i] as string,
-      black: historySan[i + 1] as string | undefined,
-    });
-  }
-  return formatted;
-}
 
 export default function PlayPage() {
   const router = useRouter();
@@ -361,22 +344,7 @@ export default function PlayPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="px-4 lg:px-6 h-16 flex items-center border-b bg-background/80 backdrop-blur-xl sticky top-0 z-50">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" asChild>
-            <Link href="/dashboard" className="flex items-center gap-2">
-              <ArrowLeft className="w-4 h-4" />
-              Back
-            </Link>
-          </Button>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-primary to-primary/80 rounded-xl flex items-center justify-center">
-              <Crown className="h-4 w-4 text-primary-foreground" />
-            </div>
-            <span className="text-xl font-semibold">PawnPilot</span>
-          </div>
-        </div>
-      </header>
+      <GameHeader backHref="/dashboard" />
 
       {/* Main Content */}
       <div className="flex h-[calc(100vh-4rem)]">

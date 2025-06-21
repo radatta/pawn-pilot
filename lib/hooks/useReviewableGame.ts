@@ -1,9 +1,11 @@
-import { useState, useCallback, useRef, useMemo } from "react";
+import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { Chess, Move as ChessMove } from "chess.js";
 
 interface UseReviewableGameOptions {
     /** Optional PGN to preload */
     pgn?: string;
+    /** Attach global arrow-key navigation handlers (default true) */
+    enableKeyboardNavigation?: boolean;
 }
 
 interface ReviewableGame {
@@ -20,6 +22,8 @@ interface ReviewableGame {
     fullSanHistory: string[];
     /** Index (0-based) of the current ply, or -1 for the starting position */
     currentPly: number;
+    /** Replace current game with provided PGN */
+    loadPGN: (pgnString: string) => void;
 }
 
 /**
@@ -27,7 +31,7 @@ interface ReviewableGame {
  * while keeping the full move list static for UI display.
  */
 export function useReviewableGame(options: UseReviewableGameOptions = {}): ReviewableGame {
-    const { pgn } = options;
+    const { pgn, enableKeyboardNavigation = true } = options;
 
     const [game, _setGame] = useState(() => {
         const g = new Chess();
@@ -115,6 +119,38 @@ export function useReviewableGame(options: UseReviewableGameOptions = {}): Revie
 
     const currentPly = game.history().length - 1;
 
+    const loadPGN = useCallback(
+        (pgnString: string) => {
+            const g = new Chess();
+            if (pgnString) {
+                try {
+                    g.loadPgn(pgnString);
+                } catch {
+                    /* ignore */
+                }
+            }
+            setFutureMoves([]);
+            setGame(g);
+        },
+        [setGame],
+    );
+
+    // Optional global keyboard navigation
+    useEffect(() => {
+        if (!enableKeyboardNavigation) return;
+        const handler = (e: KeyboardEvent) => {
+            if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                stepBackward();
+            } else if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                stepForward();
+            }
+        };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+    }, [enableKeyboardNavigation, stepBackward, stepForward]);
+
     return {
         game,
         updateGameExternal,
@@ -123,5 +159,6 @@ export function useReviewableGame(options: UseReviewableGameOptions = {}): Revie
         goToPly,
         fullSanHistory,
         currentPly,
+        loadPGN,
     };
 } 
