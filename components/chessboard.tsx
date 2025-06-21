@@ -114,6 +114,16 @@ export function Chessboard({
 
   // --- Highlighting ---
   const customSquareStyles: Record<string, React.CSSProperties> = {};
+
+  // Highlight the last move (destination square in orange)
+  const history = game.history({ verbose: true });
+  if (history.length > 0) {
+    const lastMove = history[history.length - 1];
+    customSquareStyles[lastMove.to] = {
+      background: "#eab30888",
+    };
+  }
+
   if (selectedSquare) {
     customSquareStyles[selectedSquare] = {
       background: "#eab30888",
