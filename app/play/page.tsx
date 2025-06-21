@@ -99,12 +99,20 @@ export default function PlayPage() {
     );
   };
 
+  // Only allow the engine to move when we are on the latest ply (i.e., not navigating history)
+  const atLatestPosition = currentPly === fullSanHistory.length - 1;
+
   // Effect to handle AI moves
   useEffect(() => {
     setCurrentPlayer(game.turn() === "w" ? "white" : "black");
 
-    if (game.turn() === "b" && gameResult === null && gameId) {
-      const thinkTime = 500 + Math.random() * 500;
+    if (atLatestPosition && game.turn() === "b" && gameResult === null && gameId) {
+      // Artificial delay: 2-5 seconds for early game, 5-10 seconds for mid/endgame
+      const moveNumber = Math.floor(game.history().length / 2) + 1;
+      const thinkTime =
+        moveNumber <= 10
+          ? 2000 + Math.random() * 3000 // 2-5 seconds for moves 1-10
+          : 5000 + Math.random() * 5000; // 5-10 seconds for moves 11+
 
       setTimeout(async () => {
         const gameCopy = new Chess();
@@ -152,7 +160,7 @@ export default function PlayPage() {
         }
       }, thinkTime);
     }
-  }, [game, gameId]);
+  }, [game, gameId, currentPly, fullSanHistory, gameResult]);
 
   const handleNewGame = async () => {
     try {
