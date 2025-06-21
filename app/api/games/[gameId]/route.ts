@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createSupabaseServer } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -32,7 +32,7 @@ export async function GET(
     req: Request,
     { params }: { params: { gameId: string } }
 ) {
-    const supabase = await createClient();
+    const supabase = await createSupabaseServer();
     const {
         data: { user },
     } = await supabase.auth.getUser();
@@ -59,7 +59,7 @@ export async function PUT(
     req: Request,
     { params }: { params: { gameId: string } }
 ) {
-    const supabase = await createClient();
+    const supabase = await createSupabaseServer();
     const {
         data: { user },
     } = await supabase.auth.getUser();

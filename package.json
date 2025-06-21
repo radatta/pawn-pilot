@@ -12,8 +12,11 @@
     "@radix-ui/react-label": "^2.1.6",
     "@radix-ui/react-scroll-area": "^1.2.9",
     "@radix-ui/react-slot": "^1.2.3",
+    "@supabase-cache-helpers/postgrest-react-query": "^1.13.4",
     "@supabase/ssr": "latest",
     "@supabase/supabase-js": "latest",
+    "@tanstack/react-query": "4",
+    "@tanstack/react-query-devtools": "4",
     "@types/chess.js": "^0.13.7",
     "chess.js": "^1.4.0",
     "class-variance-authority": "^0.7.1",
@@ -31,6 +34,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@tanstack/eslint-plugin-query": "4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
@@ -38,6 +42,7 @@
     "eslint": "^9",
     "eslint-config-next": "15.3.1",
     "postcss": "^8",
+    "supabase": "^2.26.9",
     "tailwindcss": "^3.4.17",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5"
