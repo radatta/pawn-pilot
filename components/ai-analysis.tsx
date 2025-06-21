@@ -28,7 +28,9 @@ export function AIAnalysis({ analysis, isThinking = false }: AIAnalysisProps) {
             Analyzing position...
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground leading-relaxed">{analysis}</p>
+          <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+            {analysis}
+          </p>
         )}
       </CardContent>
     </Card>

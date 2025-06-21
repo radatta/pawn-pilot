@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Chess } from 'chess.js'
 import { analyzePosition, AnalysisResult } from '@/lib/engine/stockfish'
+import { useDebouncedCallback } from 'use-debounce'
 
 export interface StockfishAnalysis {
     analysisText: string
@@ -24,43 +25,66 @@ export function useStockfishAnalysis(game: Chess, depth = 18): StockfishAnalysis
         thinking: false,
     })
 
-    useEffect(() => {
-        let cancelled = false
+    // Create a debounced analysis function.  It will run only once the
+    // position has been stable for 1000 ms, regardless of how many times it
+    // is invoked during rapid navigation.
+    const debouncedAnalyze = useDebouncedCallback(async (targetFen: string, normFen: string) => {
+        setState((s) => ({ ...s, thinking: true }))
 
+        try {
+            const [engineRes, llmRes] = await Promise.all([
+                analyzePosition(targetFen, depth) as Promise<AnalysisResult>,
+                fetch("/api/analysis", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        fen: targetFen,
+                        lastMoveSan: (() => {
+                            const hist = game.history()
+                            return hist.length ? hist[hist.length - 1] : "starting position"
+                        })(),
+                    }),
+                })
+                    .then((r) => r.json())
+                    .then((j) => (j.analysis as string | undefined) ?? "Analysis unavailable"),
+            ])
+
+            // Build details line (best move + evaluation)
+            const detailsParts: string[] = [];
+            if (engineRes.bestMove) detailsParts.push(`Best: ${engineRes.bestMove}`);
+
+            if (engineRes.mateIn !== undefined) {
+                detailsParts.push(`Mate in ${engineRes.mateIn}`);
+            } else if (engineRes.evaluationCp !== undefined) {
+                const cp = (game.turn() === "w" ? 1 : -1) * (engineRes.evaluationCp / 100);
+                detailsParts.push(`Eval: ${cp.toFixed(2)}`);
+            }
+
+            const text = detailsParts.length ? `${llmRes}\n${detailsParts.join(" | ")}` : llmRes;
+
+            cache.current.set(normFen, { text, best: engineRes.bestMove })
+            setState({ analysisText: text, bestMove: engineRes.bestMove ?? null, thinking: false })
+        } catch (err) {
+            console.error("useStockfishAnalysis error", err)
+            setState({ analysisText: "Analysis error", bestMove: null, thinking: false })
+        }
+    }, 1000)
+
+    useEffect(() => {
         const cached = cache.current.get(normalisedFen)
         if (cached) {
             setState({ analysisText: cached.text, bestMove: cached.best, thinking: false })
             return
         }
 
-        async function run() {
-            setState((s) => ({ ...s, thinking: true }))
-            try {
-                const res: AnalysisResult = await analyzePosition(fen, depth)
-                if (cancelled) return
+        debouncedAnalyze(fen, normalisedFen)
 
-                let text = ''
-                if (res.mateIn !== undefined) {
-                    text = `Mate in ${res.mateIn}`
-                } else if (res.evaluationCp !== undefined) {
-                    const cp = (game.turn() === 'w' ? 1 : -1) * (res.evaluationCp / 100)
-                    text = `Eval: ${cp.toFixed(2)} | Depth: ${res.depth}`
-                } else {
-                    text = 'Eval unavailable'
-                }
-
-                cache.current.set(normalisedFen, { text, best: res.bestMove })
-                setState({ analysisText: text, bestMove: res.bestMove ?? null, thinking: false })
-            } catch {
-                if (!cancelled) setState({ analysisText: 'Engine error', bestMove: null, thinking: false })
-            }
-        }
-        run()
-
+        // Cancel pending debounced callback if the component unmounts or the
+        // dependencies change before the timer fires.
         return () => {
-            cancelled = true
+            debouncedAnalyze.cancel()
         }
-    }, [normalisedFen, fen, game, depth])
+    }, [normalisedFen, fen, debouncedAnalyze])
 
     return state
 } 
