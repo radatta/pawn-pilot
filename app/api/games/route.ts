@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
-export async function POST() {
+export async function POST(req: Request) {
     const supabase = await createClient();
     const {
         data: { user },
@@ -10,6 +10,18 @@ export async function POST() {
 
     if (userError || !user) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Parse optional time control from request body
+    let timeControl = 300; // Default 5 minutes
+    let increment = 0; // Default no increment
+
+    try {
+        const body = await req.json();
+        if (body.timeControl) timeControl = body.timeControl;
+        if (body.increment) increment = body.increment;
+    } catch {
+        // Use defaults if no body provided
     }
 
     // For simplicity, user always plays white for now
@@ -22,6 +34,11 @@ export async function POST() {
                 black_player: "ai",
                 status: "in_progress",
                 pgn: "", // Start with an empty PGN
+                time_control: timeControl,
+                white_time_remaining: timeControl,
+                black_time_remaining: timeControl,
+                increment: increment,
+                last_move_timestamp: new Date().toISOString(),
             },
         ])
         .select()

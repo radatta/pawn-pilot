@@ -19,7 +19,11 @@ const BodySchema = z.object({
     pgn: z.string().optional(),
     status: GameStatusSchema.optional(),
     result: GameResultSchema.optional(),
+    white_time_remaining: z.number().optional(),
+    black_time_remaining: z.number().optional(),
+    last_move_timestamp: z.string().optional(),
 });
+
 export async function GET(
     req: Request,
     { params }: { params: { gameId: string } }
@@ -62,9 +66,9 @@ export async function PUT(
 
     const body = await req.json();
 
-    if (!body.pgn && !body.status && !body.result) {
+    if (!body.pgn && !body.status && !body.result && !body.white_time_remaining && !body.black_time_remaining) {
         return NextResponse.json(
-            { error: "pgn, status, or result is required" },
+            { error: "pgn, status, result, or time update is required" },
             { status: 400 }
         );
     }
@@ -76,12 +80,12 @@ export async function PUT(
         return NextResponse.json({ error: "Invalid body" }, { status: 400 });
     }
 
-    const { pgn, status, result } = parsedBody.data;
+    const { pgn, status, result, white_time_remaining, black_time_remaining, last_move_timestamp } = parsedBody.data;
 
     // First, verify the user owns the game they are trying to update
     const { data: game, error: fetchError } = await supabase
         .from("games")
-        .select("id")
+        .select("id, white_time_remaining, black_time_remaining, increment")
         .eq("id", (await params).gameId)
         .eq("user_id", user.id)
         .single();
@@ -90,11 +94,26 @@ export async function PUT(
         return NextResponse.json({ error: "Game not found or access denied" }, { status: 404 });
     }
 
+    // Build update object
+    const updateData: {
+        pgn?: string;
+        status?: z.infer<typeof GameStatusSchema>;
+        result?: GameResult;
+        white_time_remaining?: number;
+        black_time_remaining?: number;
+        last_move_timestamp?: string;
+    } = {};
+    if (pgn !== undefined) updateData.pgn = pgn;
+    if (status !== undefined) updateData.status = status;
+    if (result !== undefined) updateData.result = result;
+    if (white_time_remaining !== undefined) updateData.white_time_remaining = white_time_remaining;
+    if (black_time_remaining !== undefined) updateData.black_time_remaining = black_time_remaining;
+    if (last_move_timestamp !== undefined) updateData.last_move_timestamp = last_move_timestamp;
 
     // Now, perform the update
     const { data, error } = await supabase
         .from("games")
-        .update({ pgn, status, result })
+        .update(updateData)
         .eq("id", (await params).gameId)
         .select()
         .single();

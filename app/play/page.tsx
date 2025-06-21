@@ -52,6 +52,9 @@ export default function PlayPage() {
   const [currentPlayer, setCurrentPlayer] = useState<"white" | "black">("white");
   const [analysis, setAnalysis] = useState("Start a new game to begin!");
   const [gameResult, setGameResult] = useState<GameResult | null>(null);
+  const [whiteTimeRemaining, setWhiteTimeRemaining] = useState(300);
+  const [blackTimeRemaining, setBlackTimeRemaining] = useState(300);
+  const [lastMoveTimestamp, setLastMoveTimestamp] = useState<Date | null>(null);
 
   // Read ?gameId= from URL
   const searchParams = useSearchParams();
@@ -59,8 +62,74 @@ export default function PlayPage() {
 
   const moveHistory = formatMoveHistory(fullSanHistory);
 
+  // Function to handle time updates
+  const handleTimeUpdate = async (white: number, black: number) => {
+    if (!gameId) return;
+
+    // Update local state
+    setWhiteTimeRemaining(white);
+    setBlackTimeRemaining(black);
+
+    // Check for time out
+    if (white === 0 && gameResult === null) {
+      // White ran out of time - Black wins
+      setGameResult("checkmate");
+      setAnalysis("White ran out of time. Black wins!");
+      await handleTimeOut("white");
+    } else if (black === 0 && gameResult === null) {
+      // Black ran out of time - White wins
+      setGameResult("checkmate");
+      setAnalysis("Black ran out of time. White wins!");
+      await handleTimeOut("black");
+    }
+  };
+
+  // Handle time out
+  const handleTimeOut = async (loser: "white" | "black") => {
+    if (!gameId) return;
+    try {
+      await fetch(`/api/games/${gameId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "completed",
+          result: "checkmate",
+          white_time_remaining: loser === "white" ? 0 : whiteTimeRemaining,
+          black_time_remaining: loser === "black" ? 0 : blackTimeRemaining,
+        }),
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "An error occurred");
+    }
+  };
+
   // Function to update game state via API
-  const updateGame = (newGame: Chess) => {
+  const updateGame = async (newGame: Chess) => {
+    // Calculate time spent on move
+    const now = new Date();
+    const timeUpdate: { white_time_remaining?: number; black_time_remaining?: number } =
+      {};
+
+    if (lastMoveTimestamp && gameId) {
+      const elapsedSeconds = Math.floor(
+        (now.getTime() - lastMoveTimestamp.getTime()) / 1000
+      );
+
+      if (game.turn() === "w") {
+        // White just made a move, so deduct from white's time
+        const newWhiteTime = Math.max(0, whiteTimeRemaining - elapsedSeconds);
+        setWhiteTimeRemaining(newWhiteTime);
+        timeUpdate.white_time_remaining = newWhiteTime;
+      } else {
+        // Black just made a move, so deduct from black's time
+        const newBlackTime = Math.max(0, blackTimeRemaining - elapsedSeconds);
+        setBlackTimeRemaining(newBlackTime);
+        timeUpdate.black_time_remaining = newBlackTime;
+      }
+    }
+
+    setLastMoveTimestamp(now);
+
     // Optimistically update UI first
     updateGameExternal(newGame);
 
@@ -93,7 +162,11 @@ export default function PlayPage() {
     fetch(`/api/games/${gameId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pgn: newGame.pgn() }),
+      body: JSON.stringify({
+        pgn: newGame.pgn(),
+        ...timeUpdate,
+        last_move_timestamp: now.toISOString(),
+      }),
     }).catch((err) =>
       toast.error(err instanceof Error ? err.message : "An error occurred")
     );
@@ -164,11 +237,19 @@ export default function PlayPage() {
 
   const handleNewGame = async () => {
     try {
-      const response = await fetch("/api/games", { method: "POST" });
+      const response = await fetch("/api/games", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ timeControl: 300, increment: 0 }), // 5 minute game
+      });
       if (!response.ok) throw new Error("Failed to create new game");
       const newGameData = await response.json();
 
       setGameId(newGameData.id);
+      setWhiteTimeRemaining(newGameData.white_time_remaining || 300);
+      setBlackTimeRemaining(newGameData.black_time_remaining || 300);
+      setLastMoveTimestamp(new Date(newGameData.last_move_timestamp || new Date()));
+
       const newGameInstance = new Chess();
       if (newGameData.pgn) {
         newGameInstance.loadPgn(newGameData.pgn);
@@ -235,6 +316,14 @@ export default function PlayPage() {
       if (data.status === "completed") {
         setGameResult(data.result);
       }
+
+      // Load time data
+      setWhiteTimeRemaining(data.white_time_remaining || 300);
+      setBlackTimeRemaining(data.black_time_remaining || 300);
+      if (data.last_move_timestamp) {
+        setLastMoveTimestamp(new Date(data.last_move_timestamp));
+      }
+
       const loadedGame = new Chess();
       if (data.pgn) {
         loadedGame.loadPgn(data.pgn);
@@ -321,6 +410,10 @@ export default function PlayPage() {
             currentPlayer={currentPlayer}
             playerColor="white"
             gameState="playing"
+            whiteTimeRemaining={whiteTimeRemaining}
+            blackTimeRemaining={blackTimeRemaining}
+            onTimeUpdate={handleTimeUpdate}
+            gameOver={gameResult !== null}
           />
 
           {/* Move History */}
