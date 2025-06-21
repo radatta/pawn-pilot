@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Chess } from "chess.js";
@@ -93,19 +93,19 @@ export default function PlayPage() {
   // ------------------------------------------------------------
   const updateGameMutation = useUpdateGame(gameId ?? undefined);
 
-  const handleNewGame = () => {
-    createGameMutation.mutate(
-      { timeControl: 300, increment: 0 },
-      {
-        onSuccess: (data: { id: string }) => {
-          setGameId(data.id);
-          router.replace(`/play?gameId=${data.id}`);
-        },
-        onError: (error) => {
-          toast.error(error instanceof Error ? error.message : "An error occurred");
-        },
-      }
-    );
+  const handleNewGame = async () => {
+    try {
+      const data = await createGameMutation.mutateAsync({
+        timeControl: 300,
+        increment: 0,
+      });
+      console.log("New game created", data.id);
+      setGameId(data.id);
+      console.log("Redirecting to", `/play?gameId=${data.id}`);
+      router.replace(`/play?gameId=${data.id}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "An error occurred");
+    }
   };
 
   // Function to handle time updates
@@ -309,11 +309,18 @@ export default function PlayPage() {
     setFlippedBoard(!flippedBoard);
   };
 
+  const hasInitializedRef = useRef(false);
   // When URL param changes, update gameId or create new game
   useEffect(() => {
+    console.log("Initializing game", urlGameId, hasInitializedRef.current);
+    if (hasInitializedRef.current) return;
+    hasInitializedRef.current = true;
+
     if (urlGameId) {
+      console.log("Loading existing game", urlGameId);
       setGameId(urlGameId);
     } else if (!gameId) {
+      console.log("Creating new game");
       handleNewGame();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
