@@ -76,12 +76,12 @@ export default function PlayPage() {
     // Check for time out
     if (white === 0 && gameResult === null) {
       // White ran out of time - Black wins
-      setGameResult("checkmate");
+      setGameResult("timeout");
       setAnalysis("White ran out of time. Black wins!");
       await handleTimeOut("white");
     } else if (black === 0 && gameResult === null) {
       // Black ran out of time - White wins
-      setGameResult("checkmate");
+      setGameResult("timeout");
       setAnalysis("Black ran out of time. White wins!");
       await handleTimeOut("black");
     }
@@ -96,7 +96,7 @@ export default function PlayPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           status: "completed",
-          result: "checkmate",
+          result: "timeout",
           white_time_remaining: loser === "white" ? 0 : whiteTimeRemaining,
           black_time_remaining: loser === "black" ? 0 : blackTimeRemaining,
         }),
@@ -417,7 +417,7 @@ export default function PlayPage() {
         </div>
 
         {/* Sidebar Panel */}
-        <div className="w-80 border-l bg-card/30 backdrop-blur-sm p-6 space-y-6 overflow-y-auto">
+        <div className="w-96 border-l bg-card/30 backdrop-blur-sm p-6 space-y-6 overflow-y-auto">
           {/* Game Status */}
           <GameStatus
             currentPlayer={currentPlayer}

@@ -11,6 +11,7 @@ const GameResultSchema = z.enum([
     "stalemate",
     "insufficient_material",
     "threefold_repetition",
+    "timeout",
 ]);
 
 export type GameResult = z.infer<typeof GameResultSchema>;

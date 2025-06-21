@@ -22,7 +22,7 @@ create table public.games (
   user_id uuid not null,
   white_player text check (white_player in ('user', 'ai')),
   black_player text check (black_player in ('user', 'ai')),
-  result text check (result in ('checkmate', 'draw', 'resigned', 'stalemate', 'insufficient_material', 'threefold_repetition')),
+  result text check (result in ('checkmate', 'draw', 'resigned', 'stalemate', 'insufficient_material', 'threefold_repetition', 'timeout')),
   status text not null default 'in_progress' check (status in ('in_progress', 'completed')),
   pgn text,
   created_at timestamptz not null default now(),

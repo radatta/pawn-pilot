@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Crown, ArrowLeft } from "lucide-react";
@@ -63,6 +63,23 @@ export default function AnalysisPage() {
 
   const moveHistory = formatMoveHistory(fullSanHistory);
 
+  // --------------------------------------------------------------------
+  // Memoised FEN & normalisation helpers
+  // --------------------------------------------------------------------
+  const fen = useMemo(() => game.fen(), [game]);
+  const normalisedFen = useMemo(() => fen.split(" ").slice(0, 4).join(" "), [fen]);
+
+  // Simple in-memory cache for analysis results keyed by normalised FEN.
+  const analysisCache = useRef<
+    Map<
+      string,
+      {
+        analysisText: string;
+        bestMove: string | null;
+      }
+    >
+  >(new Map());
+
   // Update displayed time when currentPly changes
   useEffect(() => {
     const entry = clockHistory[currentPly] ?? clockHistory[clockHistory.length - 1];
@@ -103,27 +120,49 @@ export default function AnalysisPage() {
     return () => window.removeEventListener("keydown", handler);
   }, [stepBackward, stepForward]);
 
-  // Evaluate position whenever game changes
+  // --------------------------------------------------------------------
+  // Evaluate position whenever the POSITION (not the object) changes.
+  // Uses cache to avoid duplicate engine evaluation of identical FENs.
+  // --------------------------------------------------------------------
   useEffect(() => {
     let canceled = false;
+
+    // First, see if we already analysed this position.
+    const cached = analysisCache.current.get(normalisedFen);
+    if (cached) {
+      setAnalysis(cached.analysisText);
+      setBestMove(cached.bestMove);
+      return; // Skip expensive Stockfish call
+    }
+
     async function evaluate() {
       setIsThinking(true);
       try {
-        const result: AnalysisResult = await analyzePosition(game.fen(), 18);
+        const result: AnalysisResult = await analyzePosition(fen, 18);
         if (canceled) return;
+
+        // Build human-readable analysis string.
+        let analysisText = "";
         if (result.mateIn !== undefined) {
-          setAnalysis(`Mate in ${result.mateIn}`);
+          analysisText = `Mate in ${result.mateIn}`;
         } else if (result.evaluationCp !== undefined) {
           const evalScore = (game.turn() === "w" ? 1 : -1) * (result.evaluationCp / 100);
-          setAnalysis(
-            `Eval: ${evalScore.toFixed(2)} | Depth: ${
-              result.depth
-            } | Best line: ${result.pv?.slice(0, 60)}...`
-          );
+          analysisText = `Eval: ${evalScore.toFixed(2)} | Depth: ${
+            result.depth
+          } | Best line: ${result.pv?.slice(0, 60)}...`;
         } else {
-          setAnalysis("Evaluation unavailable");
+          analysisText = "Evaluation unavailable";
         }
+
+        // Update state.
+        setAnalysis(analysisText);
         setBestMove(result.bestMove);
+
+        // Cache for future visits.
+        analysisCache.current.set(normalisedFen, {
+          analysisText,
+          bestMove: result.bestMove,
+        });
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "An error occurred");
         if (!canceled) setAnalysis("Engine error");
@@ -137,7 +176,7 @@ export default function AnalysisPage() {
     return () => {
       canceled = true;
     };
-  }, [game]);
+  }, [normalisedFen, fen, game]);
 
   // Load game from backend if id provided
   useEffect(() => {
@@ -193,7 +232,7 @@ export default function AnalysisPage() {
         </div>
 
         {/* Sidebar Panel */}
-        <div className="w-80 border-l bg-card/30 backdrop-blur-sm p-6 space-y-6 overflow-y-auto">
+        <div className="w-96 border-l bg-card/30 backdrop-blur-sm p-6 space-y-6 overflow-y-auto">
           {/* Clock Status */}
           <GameStatus
             currentPlayer={game.turn() === "w" ? "white" : "black"}
