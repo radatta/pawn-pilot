@@ -11,6 +11,7 @@ import { Chessboard } from "@/components/chessboard";
 import { MoveHistory } from "@/components/move-history";
 import { AIAnalysis } from "@/components/ai-analysis";
 import { Button } from "@/components/ui/button";
+import { GameStatus } from "@/components/game-status";
 import { analyzePosition, AnalysisResult, terminateEngine } from "@/lib/engine/stockfish";
 import { useReviewableGame } from "@/lib/hooks/useReviewableGame";
 
@@ -51,8 +52,26 @@ export default function AnalysisPage() {
   );
   const [isThinking, setIsThinking] = useState(false);
   const [bestMove, setBestMove] = useState<string | null>(null);
+  const [clockHistory, setClockHistory] = useState<{ white: number; black: number }[]>([
+    {
+      white: 300,
+      black: 300,
+    },
+  ]);
+  const [whiteTime, setWhiteTime] = useState(300);
+  const [blackTime, setBlackTime] = useState(300);
 
   const moveHistory = formatMoveHistory(fullSanHistory);
+
+  // Update displayed time when currentPly changes
+  useEffect(() => {
+    const entry = clockHistory[currentPly] ?? clockHistory[clockHistory.length - 1];
+    if (entry) {
+      setWhiteTime(entry.white);
+      setBlackTime(entry.black);
+    }
+  }, [currentPly, clockHistory]);
+
   const arrows = useMemo(() => {
     // Only draw an arrow when the engine provides a standard LAN move (e.g. "e2e4" or "e7e8q").
     // Stockfish returns "(none)" when no legal moves are available which would otherwise
@@ -130,6 +149,7 @@ export default function AnalysisPage() {
         const loaded = new Chess();
         if (data.pgn) loaded.loadPgn(data.pgn);
         updateGameExternal(loaded);
+        if (data.clock_history) setClockHistory(data.clock_history);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "An error occurred");
       }
@@ -174,6 +194,16 @@ export default function AnalysisPage() {
 
         {/* Sidebar Panel */}
         <div className="w-80 border-l bg-card/30 backdrop-blur-sm p-6 space-y-6 overflow-y-auto">
+          {/* Clock Status */}
+          <GameStatus
+            currentPlayer={game.turn() === "w" ? "white" : "black"}
+            playerColor="white"
+            gameState="playing"
+            whiteTimeRemaining={whiteTime}
+            blackTimeRemaining={blackTime}
+            gameOver={true}
+          />
+
           {/* Move History */}
           <MoveHistory moves={moveHistory} currentPly={currentPly} onSelect={goToPly} />
 

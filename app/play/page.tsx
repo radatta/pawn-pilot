@@ -55,6 +55,9 @@ export default function PlayPage() {
   const [whiteTimeRemaining, setWhiteTimeRemaining] = useState(300);
   const [blackTimeRemaining, setBlackTimeRemaining] = useState(300);
   const [lastMoveTimestamp, setLastMoveTimestamp] = useState<Date | null>(null);
+  const [clockHistory, setClockHistory] = useState<{ white: number; black: number }[]>([
+    { white: 300, black: 300 },
+  ]);
 
   // Read ?gameId= from URL
   const searchParams = useSearchParams();
@@ -110,6 +113,9 @@ export default function PlayPage() {
     const timeUpdate: { white_time_remaining?: number; black_time_remaining?: number } =
       {};
 
+    let newWhite = whiteTimeRemaining;
+    let newBlack = blackTimeRemaining;
+
     if (lastMoveTimestamp && gameId) {
       const elapsedSeconds = Math.floor(
         (now.getTime() - lastMoveTimestamp.getTime()) / 1000
@@ -117,16 +123,20 @@ export default function PlayPage() {
 
       if (game.turn() === "w") {
         // White just made a move, so deduct from white's time
-        const newWhiteTime = Math.max(0, whiteTimeRemaining - elapsedSeconds);
-        setWhiteTimeRemaining(newWhiteTime);
-        timeUpdate.white_time_remaining = newWhiteTime;
+        newWhite = Math.max(0, whiteTimeRemaining - elapsedSeconds);
+        setWhiteTimeRemaining(newWhite);
+        timeUpdate.white_time_remaining = newWhite;
       } else {
         // Black just made a move, so deduct from black's time
-        const newBlackTime = Math.max(0, blackTimeRemaining - elapsedSeconds);
-        setBlackTimeRemaining(newBlackTime);
-        timeUpdate.black_time_remaining = newBlackTime;
+        newBlack = Math.max(0, blackTimeRemaining - elapsedSeconds);
+        setBlackTimeRemaining(newBlack);
+        timeUpdate.black_time_remaining = newBlack;
       }
     }
+
+    // Update clock history
+    const newClockHistory = [...clockHistory, { white: newWhite, black: newBlack }];
+    setClockHistory(newClockHistory);
 
     setLastMoveTimestamp(now);
 
@@ -166,6 +176,7 @@ export default function PlayPage() {
         pgn: newGame.pgn(),
         ...timeUpdate,
         last_move_timestamp: now.toISOString(),
+        clock_history: newClockHistory,
       }),
     }).catch((err) =>
       toast.error(err instanceof Error ? err.message : "An error occurred")
@@ -249,6 +260,7 @@ export default function PlayPage() {
       setWhiteTimeRemaining(newGameData.white_time_remaining || 300);
       setBlackTimeRemaining(newGameData.black_time_remaining || 300);
       setLastMoveTimestamp(new Date(newGameData.last_move_timestamp || new Date()));
+      setClockHistory(newGameData.clock_history || [{ white: 300, black: 300 }]);
 
       const newGameInstance = new Chess();
       if (newGameData.pgn) {
@@ -323,6 +335,7 @@ export default function PlayPage() {
       if (data.last_move_timestamp) {
         setLastMoveTimestamp(new Date(data.last_move_timestamp));
       }
+      setClockHistory(data.clock_history || [{ white: 300, black: 300 }]);
 
       const loadedGame = new Chess();
       if (data.pgn) {

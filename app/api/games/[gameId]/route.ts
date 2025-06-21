@@ -15,6 +15,8 @@ const GameResultSchema = z.enum([
 
 export type GameResult = z.infer<typeof GameResultSchema>;
 
+const ClockHistorySchema = z.array(z.object({ white: z.number(), black: z.number() }));
+
 const BodySchema = z.object({
     pgn: z.string().optional(),
     status: GameStatusSchema.optional(),
@@ -22,6 +24,7 @@ const BodySchema = z.object({
     white_time_remaining: z.number().optional(),
     black_time_remaining: z.number().optional(),
     last_move_timestamp: z.string().optional(),
+    clock_history: ClockHistorySchema.optional(),
 });
 
 export async function GET(
@@ -80,7 +83,7 @@ export async function PUT(
         return NextResponse.json({ error: "Invalid body" }, { status: 400 });
     }
 
-    const { pgn, status, result, white_time_remaining, black_time_remaining, last_move_timestamp } = parsedBody.data;
+    const { pgn, status, result, white_time_remaining, black_time_remaining, last_move_timestamp, clock_history } = parsedBody.data;
 
     // First, verify the user owns the game they are trying to update
     const { data: game, error: fetchError } = await supabase
@@ -102,6 +105,7 @@ export async function PUT(
         white_time_remaining?: number;
         black_time_remaining?: number;
         last_move_timestamp?: string;
+        clock_history?: z.infer<typeof ClockHistorySchema>;
     } = {};
     if (pgn !== undefined) updateData.pgn = pgn;
     if (status !== undefined) updateData.status = status;
@@ -109,6 +113,7 @@ export async function PUT(
     if (white_time_remaining !== undefined) updateData.white_time_remaining = white_time_remaining;
     if (black_time_remaining !== undefined) updateData.black_time_remaining = black_time_remaining;
     if (last_move_timestamp !== undefined) updateData.last_move_timestamp = last_move_timestamp;
+    if (clock_history !== undefined) updateData.clock_history = clock_history;
 
     // Now, perform the update
     const { data, error } = await supabase

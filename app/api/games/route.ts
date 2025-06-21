@@ -39,6 +39,7 @@ export async function POST(req: Request) {
                 black_time_remaining: timeControl,
                 increment: increment,
                 last_move_timestamp: new Date().toISOString(),
+                clock_history: [{ white: timeControl, black: timeControl }],
             },
         ])
         .select()

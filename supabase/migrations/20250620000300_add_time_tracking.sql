@@ -5,3 +5,4 @@ ADD COLUMN white_time_remaining integer NOT NULL DEFAULT 300,
 ADD COLUMN black_time_remaining integer NOT NULL DEFAULT 300,
 ADD COLUMN increment integer NOT NULL DEFAULT 0, -- increment in seconds
 ADD COLUMN last_move_timestamp timestamptz;
+ADD COLUMN IF NOT EXISTS clock_history jsonb DEFAULT '[]'::jsonb;
