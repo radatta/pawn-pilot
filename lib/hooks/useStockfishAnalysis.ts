@@ -1,12 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Chess } from 'chess.js'
-import { analyzePosition, AnalysisResult } from '@/lib/engine/stockfish'
+import { analyzePosition } from '@/lib/engine/stockfish'
 import { useDebouncedCallback } from 'use-debounce'
 
 export interface StockfishAnalysis {
     analysisText: string
     bestMove: string | null
     thinking: boolean
+}
+
+function movesArrayToString(moves: string[]) {
+    const result: string[] = [];
+    for (let i = 0; i < moves.length; i += 2) {
+        const moveNumber = Math.floor(i / 2) + 1;
+        const whiteMove = moves[i];
+        const blackMove = moves[i + 1] || "";
+        result.push(`${moveNumber}. ${whiteMove}${blackMove ? " " + blackMove : ""}`);
+    }
+    return result.join(" ");
 }
 
 /**
@@ -32,22 +43,20 @@ export function useStockfishAnalysis(game: Chess, depth = 18): StockfishAnalysis
         setState((s) => ({ ...s, thinking: true }))
 
         try {
-            const [engineRes, llmRes] = await Promise.all([
-                analyzePosition(targetFen, depth) as Promise<AnalysisResult>,
-                fetch("/api/analysis", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        fen: targetFen,
-                        lastMoveSan: (() => {
-                            const hist = game.history()
-                            return hist.length ? hist[hist.length - 1] : "starting position"
-                        })(),
-                    }),
-                })
-                    .then((r) => r.json())
-                    .then((j) => (j.analysis as string | undefined) ?? "Analysis unavailable"),
-            ])
+            const engineRes = await analyzePosition(targetFen, depth)
+
+            const llmRes = await fetch("/api/analysis", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    fen: targetFen,
+                    gameHistory: movesArrayToString(game.history()),
+                    pv: engineRes.pv,
+                }),
+            })
+                .then((r) => r.json())
+                .then((j) => (j.analysis as string | undefined) ?? "Analysis unavailable");
+
 
             // Build details line (best move + evaluation)
             const detailsParts: string[] = [];
