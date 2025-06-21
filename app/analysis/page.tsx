@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { GameStatus } from "@/components/game-status";
 import { analyzePosition, AnalysisResult, terminateEngine } from "@/lib/engine/stockfish";
 import { useReviewableGame } from "@/lib/hooks/useReviewableGame";
+import useSupabaseBrowser from "@/lib/supabase/client";
+import { useGameById } from "@/lib/queries/game-tanstack";
 
 interface FormattedMove {
   moveNumber: number;
@@ -36,6 +38,7 @@ function formatMoveHistory(history: string[]): FormattedMove[] {
 export default function AnalysisPage() {
   const searchParams = useSearchParams();
   const gameId = searchParams.get("gameId");
+  const supabase = useSupabaseBrowser();
 
   const {
     game,
@@ -178,25 +181,21 @@ export default function AnalysisPage() {
     };
   }, [normalisedFen, fen, game]);
 
-  // Load game from backend if id provided
+  // ------------------------------------------------------------
+  // React Query: load game data if gameId provided
+  // ------------------------------------------------------------
+  const { data: fetchedGame } = useGameById(supabase, gameId ?? "");
+
+  // When fetched, load into chess
   useEffect(() => {
-    async function loadGame(id: string) {
-      try {
-        const res = await fetch(`/api/games/${id}`);
-        if (!res.ok) throw new Error("Game not found");
-        const data = await res.json();
-        const loaded = new Chess();
-        if (data.pgn) loaded.loadPgn(data.pgn);
-        updateGameExternal(loaded);
-        if (data.clock_history) setClockHistory(data.clock_history);
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : "An error occurred");
-      }
-    }
-    if (gameId) {
-      loadGame(gameId);
-    }
-  }, [gameId, updateGameExternal]);
+    if (!fetchedGame) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const g: any = fetchedGame as any;
+    const loaded = new Chess();
+    if (g.pgn) loaded.loadPgn(g.pgn);
+    updateGameExternal(loaded);
+    if (g.clock_history) setClockHistory(g.clock_history);
+  }, [fetchedGame, updateGameExternal]);
 
   // Cleanup on unmount
   useEffect(() => {

@@ -6,6 +6,8 @@ import Link from "next/link";
 import { Crown, ArrowLeft } from "lucide-react";
 import { Chess } from "chess.js";
 import toast from "react-hot-toast";
+import { useGameById, useCreateGame, useUpdateGame } from "@/lib/queries/game-tanstack";
+import useSupabaseBrowser from "@/lib/supabase/client";
 
 import { Button } from "@/components/ui/button";
 import { Chessboard } from "@/components/chessboard";
@@ -38,6 +40,7 @@ function formatMoveHistory(historySan: string[]): FormattedMove[] {
 
 export default function PlayPage() {
   const router = useRouter();
+  const supabase = useSupabaseBrowser();
   const {
     game,
     updateGameExternal,
@@ -65,6 +68,63 @@ export default function PlayPage() {
 
   const moveHistory = formatMoveHistory(fullSanHistory);
 
+  // ------------------------------------------------------------
+  // React-Query: load existing game (if ?gameId=)
+  // ------------------------------------------------------------
+  const { data: fetchedGame } = useGameById(supabase, gameId ?? undefined);
+
+  // Whenever fetchedGame changes, sync local Chess state
+  useEffect(() => {
+    if (!fetchedGame) return;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const g: any = fetchedGame as any;
+      const loadedGame = new Chess();
+      if (g.pgn) loadedGame.loadPgn(g.pgn);
+
+      updateGameExternal(loadedGame);
+
+      setWhiteTimeRemaining(g.white_time_remaining || 300);
+      setBlackTimeRemaining(g.black_time_remaining || 300);
+      if (g.last_move_timestamp) {
+        setLastMoveTimestamp(new Date(g.last_move_timestamp));
+      }
+      setClockHistory(g.clock_history || [{ white: 300, black: 300 }]);
+
+      if (g.status === "completed") {
+        setGameResult(g.result);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "An error occurred");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchedGame]);
+
+  // ------------------------------------------------------------
+  // React-Query: create new game mutation (still via API route)
+  // ------------------------------------------------------------
+  const createGameMutation = useCreateGame();
+
+  // ------------------------------------------------------------
+  // React Query: generic mutation for updating a game via PUT
+  // ------------------------------------------------------------
+  const updateGameMutation = useUpdateGame(gameId ?? undefined);
+
+  const handleNewGame = () => {
+    createGameMutation.mutate(
+      { timeControl: 300, increment: 0 },
+      {
+        onSuccess: (data: { id: string }) => {
+          setGameId(data.id);
+          router.replace(`/play?gameId=${data.id}`);
+        },
+        onError: (error) => {
+          toast.error(error instanceof Error ? error.message : "An error occurred");
+        },
+      }
+    );
+  };
+
   // Function to handle time updates
   const handleTimeUpdate = async (white: number, black: number) => {
     if (!gameId) return;
@@ -90,20 +150,12 @@ export default function PlayPage() {
   // Handle time out
   const handleTimeOut = async (loser: "white" | "black") => {
     if (!gameId) return;
-    try {
-      await fetch(`/api/games/${gameId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status: "completed",
-          result: "timeout",
-          white_time_remaining: loser === "white" ? 0 : whiteTimeRemaining,
-          black_time_remaining: loser === "black" ? 0 : blackTimeRemaining,
-        }),
-      });
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "An error occurred");
-    }
+    updateGameMutation.mutate({
+      status: "completed",
+      result: "timeout",
+      white_time_remaining: loser === "white" ? 0 : whiteTimeRemaining,
+      black_time_remaining: loser === "black" ? 0 : blackTimeRemaining,
+    });
   };
 
   // Function to update game state via API
@@ -169,18 +221,12 @@ export default function PlayPage() {
 
     // Persist to backend (fire-and-forget)
     if (!gameId) return;
-    fetch(`/api/games/${gameId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        pgn: newGame.pgn(),
-        ...timeUpdate,
-        last_move_timestamp: now.toISOString(),
-        clock_history: newClockHistory,
-      }),
-    }).catch((err) =>
-      toast.error(err instanceof Error ? err.message : "An error occurred")
-    );
+    updateGameMutation.mutate({
+      pgn: newGame.pgn(),
+      ...timeUpdate,
+      last_move_timestamp: now.toISOString(),
+      clock_history: newClockHistory,
+    });
   };
 
   // Only allow the engine to move when we are on the latest ply (i.e., not navigating history)
@@ -246,115 +292,45 @@ export default function PlayPage() {
     }
   }, [game, gameId, currentPly, fullSanHistory, gameResult]);
 
-  const handleNewGame = async () => {
-    try {
-      const response = await fetch("/api/games", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ timeControl: 300, increment: 0 }), // 5 minute game
-      });
-      if (!response.ok) throw new Error("Failed to create new game");
-      const newGameData = await response.json();
-
-      setGameId(newGameData.id);
-      setWhiteTimeRemaining(newGameData.white_time_remaining || 300);
-      setBlackTimeRemaining(newGameData.black_time_remaining || 300);
-      setLastMoveTimestamp(new Date(newGameData.last_move_timestamp || new Date()));
-      setClockHistory(newGameData.clock_history || [{ white: 300, black: 300 }]);
-
-      const newGameInstance = new Chess();
-      if (newGameData.pgn) {
-        newGameInstance.loadPgn(newGameData.pgn);
-      }
-      updateGameExternal(newGameInstance);
-      setCurrentPlayer("white");
-      // Update URL so refresh stays in the same game
-      router.replace(`/play?gameId=${newGameData.id}`);
-      setAnalysis(
-        "Welcome to a new game! Start with a strong opening move like 1.e4 or 1.d4 to control the center."
-      );
-      // Reset previous game result so post-game actions disappear.
-      setGameResult(null);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "An error occurred");
-      setAnalysis("Could not start a new game. Please try again.");
-    }
-  };
-
   const handleResign = async () => {
     if (!gameId) return;
-    try {
-      await fetch(`/api/games/${gameId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "completed", result: "resigned" }),
-      });
-      setAnalysis("Game resigned. Don't worry - every game is a learning opportunity!");
-      // Mark game as completed locally so post-game actions appear.
-      setGameResult("resigned");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "An error occurred");
-    }
+    updateGameMutation.mutate(
+      { status: "completed", result: "resigned" },
+      {
+        onSuccess: () => {
+          setAnalysis(
+            "Game resigned. Don't worry - every game is a learning opportunity!"
+          );
+          setGameResult("resigned");
+        },
+        onError: (error) => {
+          toast.error(error instanceof Error ? error.message : "An error occurred");
+        },
+      }
+    );
   };
 
   const handleCompleteGame = async () => {
     if (!gameId) return;
-    try {
-      await fetch(`/api/games/${gameId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status: { completed: true },
-          result: gameResult,
-        }),
-      });
-      setAnalysis("Game completed. Congratulations!");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "An error occurred");
-    }
+    updateGameMutation.mutate(
+      { status: { completed: true }, result: gameResult },
+      {
+        onSuccess: () => setAnalysis("Game completed. Congratulations!"),
+        onError: (error) =>
+          toast.error(error instanceof Error ? error.message : "An error occurred"),
+      }
+    );
   };
 
   const handleFlipBoard = () => {
     setFlippedBoard(!flippedBoard);
   };
 
-  // Load existing game if id in URL, else start new
-  const loadGame = async (id: string) => {
-    try {
-      const res = await fetch(`/api/games/${id}`);
-      if (!res.ok) throw new Error("Game not found");
-      const data = await res.json();
-      setGameId(data.id);
-      if (data.status === "completed") {
-        setGameResult(data.result);
-      }
-
-      // Load time data
-      setWhiteTimeRemaining(data.white_time_remaining || 300);
-      setBlackTimeRemaining(data.black_time_remaining || 300);
-      if (data.last_move_timestamp) {
-        setLastMoveTimestamp(new Date(data.last_move_timestamp));
-      }
-      setClockHistory(data.clock_history || [{ white: 300, black: 300 }]);
-
-      const loadedGame = new Chess();
-      if (data.pgn) {
-        loadedGame.loadPgn(data.pgn);
-      }
-      updateGameExternal(loadedGame);
-      setCurrentPlayer(loadedGame.turn() === "w" ? "white" : "black");
-      setAnalysis("Reviewing saved game. Continue playing or explore moves.");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "An error occurred");
-      // fallback to new game
-      handleNewGame();
-    }
-  };
-
+  // When URL param changes, update gameId or create new game
   useEffect(() => {
     if (urlGameId) {
-      loadGame(urlGameId);
-    } else {
+      setGameId(urlGameId);
+    } else if (!gameId) {
       handleNewGame();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
