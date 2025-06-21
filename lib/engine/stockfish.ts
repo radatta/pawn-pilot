@@ -16,38 +16,44 @@ const pendingMoveResolvers: Array<(best: string) => void> = [];
 // Resolvers waiting for analysis info callbacks.
 const infoCallbacks: Array<(info: ParsedInfo) => void> = [];
 
-// Track the current ELO limit set in the engine. null means full strength.
-let currentEloLimit: number | null = null;
+// Track the current strength set in the engine.
+let strength = false;
+
+const OPENING_PV = 1;
+const MIDGAME_PV = 2;
+const ENDGAME_PV = 2;
 
 interface ParsedInfo {
     depth?: number;
     score?: { unit: "cp" | "mate"; value: number };
+    multipv?: number;
     pv?: string;
 }
 
-async function setStrength(elo: number | null) {
+async function setStrength(weak: boolean) {
     // No need to send commands if the state is already what we want.
-    if (currentEloLimit === elo) return;
+    if (strength === weak) return;
 
     // Engine must be initialized before setting options
     if (!stockfishWorker) throw new Error("Engine not initialized");
 
-    if (elo === null) {
+    if (weak) {
+        // Set to a limited ELO for gameplay
+        ready = false;
+        stockfishWorker!.postMessage("setoption name UCI_LimitStrength value true");
+        stockfishWorker!.postMessage("setoption name UCI_Elo value 600");
+        stockfishWorker!.postMessage("setoption name MultiPV value 10");
+        // stockfishWorker!.postMessage("setoption name Skill Level value 0");
+        stockfishWorker!.postMessage("isready");
+        await waitUntilReady();
+    } else {
         // Set to full strength for analysis
         ready = false;
         stockfishWorker!.postMessage("setoption name UCI_LimitStrength value false");
         stockfishWorker!.postMessage("isready");
         await waitUntilReady();
-        currentEloLimit = null;
-    } else {
-        // Set to a limited ELO for gameplay
-        ready = false;
-        stockfishWorker!.postMessage("setoption name UCI_LimitStrength value true");
-        stockfishWorker!.postMessage(`setoption name UCI_Elo value ${elo}`);
-        stockfishWorker!.postMessage("isready");
-        await waitUntilReady();
-        currentEloLimit = elo;
     }
+    strength = weak;
 }
 
 async function initEngine() {
@@ -90,6 +96,9 @@ async function initEngine() {
                     const value = parseInt(tokens[i + 2]);
                     parsed.score = { unit, value };
                     i += 2;
+                } else if (token === "multipv") {
+                    parsed.multipv = parseInt(tokens[i + 1]);
+                    i++;
                 } else if (token === "pv") {
                     parsed.pv = tokens.slice(i + 1).join(" ");
                     break; // rest of line is PV
@@ -111,13 +120,20 @@ function waitUntilReady(): Promise<void> {
     return new Promise((res) => readyResolvers.push(res));
 }
 
-export async function getBestMove(fen: string): Promise<string> {
+function getPv(moveNumber: number) {
+    if (moveNumber <= 10) return OPENING_PV;
+    if (moveNumber <= 20) return MIDGAME_PV;
+    if (moveNumber <= 30) return ENDGAME_PV;
+    return ENDGAME_PV;
+}
+
+export async function getBestMove(fen: string, moveNumber: number): Promise<string> {
     if (typeof window === "undefined") throw new Error("Engine can run only in browser");
 
     await initEngine();
     // Set engine to a weaker playing strength.
     // This will only send commands if the strength is not already set to this ELO.
-    await setStrength(600);
+    await setStrength(true);
 
     // Prepare position and wait for the engine to acknowledge with `readyok`.
     ready = false;
@@ -129,13 +145,31 @@ export async function getBestMove(fen: string): Promise<string> {
     return new Promise((resolve, reject) => {
         if (!stockfishWorker) return reject("Engine not initialised");
 
+        let move: string | undefined;
+
+        // Capture PV lines and extract the first move of multipv #10
+        const handleInfo = (info: ParsedInfo) => {
+            if (info.multipv === getPv(moveNumber) && info.pv) {
+                // First token of the PV string is the move in UCI
+                move = info.pv.split(" ")[0];
+            }
+        };
+        infoCallbacks.push(handleInfo);
+
         const timeout = setTimeout(() => {
+            // Clean up
+            const idx = infoCallbacks.indexOf(handleInfo);
+            if (idx !== -1) infoCallbacks.splice(idx, 1);
             reject(new Error("Engine timeout"));
         }, 8000);
 
         pendingMoveResolvers.push((best) => {
             clearTimeout(timeout);
-            resolve(best);
+            // Remove info callback
+            const idx = infoCallbacks.indexOf(handleInfo);
+            if (idx !== -1) infoCallbacks.splice(idx, 1);
+            // Prefer 10th PV move if available, otherwise fallback to Stockfish's bestmove
+            resolve(move ?? best);
         });
 
         // Launch search – a lower depth makes for weaker play.
@@ -211,7 +245,7 @@ export async function analyzePosition(
     await initEngine();
     // Set engine to full strength for analysis.
     // This will only send commands if the strength is not already set to full.
-    await setStrength(null);
+    await setStrength(false);
 
     // Prepare position and wait for the engine to acknowledge with `readyok`.
     ready = false;

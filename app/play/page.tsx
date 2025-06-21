@@ -99,9 +99,7 @@ export default function PlayPage() {
         timeControl: 300,
         increment: 0,
       });
-      console.log("New game created", data.id);
       setGameId(data.id);
-      console.log("Redirecting to", `/play?gameId=${data.id}`);
       router.replace(`/play?gameId=${data.id}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "An error occurred");
@@ -215,7 +213,7 @@ export default function PlayPage() {
   // Only allow the engine to move when we are on the latest ply (i.e., not navigating history)
   const atLatestPosition = currentPly === fullSanHistory.length - 1;
 
-  // Effect to handle AI moves
+  // Effect to handle Stockfish moves
   useEffect(() => {
     setCurrentPlayer(game.turn() === "w" ? "white" : "black");
 
@@ -224,15 +222,15 @@ export default function PlayPage() {
       const moveNumber = Math.floor(game.history().length / 2) + 1;
       const thinkTime =
         moveNumber <= 10
-          ? 2000 + Math.random() * 3000 // 2-5 seconds for moves 1-10
-          : 5000 + Math.random() * 5000; // 5-10 seconds for moves 11+
+          ? 500 + Math.random() * 1000 // 2-5 seconds for moves 1-10
+          : 1000 + Math.random() * 2000; // 5-10 seconds for moves 11+
 
       setTimeout(async () => {
         const gameCopy = new Chess();
         gameCopy.loadPgn(game.pgn());
 
         try {
-          const uci = await getBestMove(gameCopy.fen());
+          const uci = await getBestMove(gameCopy.fen(), moveNumber);
           // parse UCI, e.g., e2e4 or e7e8q
           const from = uci.slice(0, 2);
           const to = uci.slice(2, 4);
@@ -312,15 +310,12 @@ export default function PlayPage() {
   const hasInitializedRef = useRef(false);
   // When URL param changes, update gameId or create new game
   useEffect(() => {
-    console.log("Initializing game", urlGameId, hasInitializedRef.current);
     if (hasInitializedRef.current) return;
     hasInitializedRef.current = true;
 
     if (urlGameId) {
-      console.log("Loading existing game", urlGameId);
       setGameId(urlGameId);
     } else if (!gameId) {
-      console.log("Creating new game");
       handleNewGame();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
