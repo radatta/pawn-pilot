@@ -182,7 +182,10 @@ export async function PUT(
             if (rowsToInsert.length > 0) {
                 const { error: insertError } = await supabase
                     .from("move_history")
-                    .insert(rowsToInsert);
+                    .upsert(rowsToInsert, {
+                        onConflict: "game_id,move_number",
+                        ignoreDuplicates: true,
+                    });
 
                 if (insertError) {
                     console.error("move_history insert error", insertError);
