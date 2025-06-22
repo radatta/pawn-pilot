@@ -86,18 +86,6 @@ export async function PUT(
 
     const { pgn, status, result, white_time_remaining, black_time_remaining, last_move_timestamp, clock_history } = parsedBody.data;
 
-    // First, verify the user owns the game they are trying to update
-    const { data: game, error: fetchError } = await supabase
-        .from("games")
-        .select("id, white_time_remaining, black_time_remaining, increment")
-        .eq("id", (await params).gameId)
-        .eq("user_id", user.id)
-        .single();
-
-    if (fetchError || !game) {
-        return NextResponse.json({ error: "Game not found or access denied" }, { status: 404 });
-    }
-
     // Build update object
     const updateData: {
         pgn?: string;
