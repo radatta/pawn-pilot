@@ -10,9 +10,9 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Missing 'fen' or 'lastMoveSan' in request body" }, { status: 400 });
         }
 
-        console.log("Position (FEN): ", fen);
-        console.log("Full game history:", gameHistory);
-        console.log("Principal variation:", pv);
+        // console.log("Position (FEN): ", fen);
+        // console.log("Full game history:", gameHistory);
+        // console.log("Principal variation:", pv);
 
         // Craft a concise prompt for the LLM
         const prompt = `You are a grandmaster-level chess coach giving advice to the WHITE player.

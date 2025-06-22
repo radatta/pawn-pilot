@@ -9,71 +9,54 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      game_reviews: {
-        Row: {
-          black_stats: Json
-          created_at: string
-          game_id: string
-          moves: Json
-          summary: string | null
-          white_stats: Json
-        }
-        Insert: {
-          black_stats: Json
-          created_at?: string
-          game_id: string
-          moves: Json
-          summary?: string | null
-          white_stats: Json
-        }
-        Update: {
-          black_stats?: Json
-          created_at?: string
-          game_id?: string
-          moves?: Json
-          summary?: string | null
-          white_stats?: Json
-        }
-        Relationships: [
-          {
-            foreignKeyName: "game_reviews_game_id_fkey"
-            columns: ["game_id"]
-            isOneToOne: true
-            referencedRelation: "games"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       games: {
         Row: {
           black_player: string | null
+          black_time_remaining: number
+          clock_history: Json | null
           created_at: string
           id: string
+          increment: number
+          last_move_timestamp: string | null
           pgn: string | null
           result: string | null
           status: string
+          time_control: number
           user_id: string
           white_player: string | null
+          white_time_remaining: number
         }
         Insert: {
           black_player?: string | null
+          black_time_remaining?: number
+          clock_history?: Json | null
           created_at?: string
           id?: string
+          increment?: number
+          last_move_timestamp?: string | null
           pgn?: string | null
           result?: string | null
           status?: string
+          time_control?: number
           user_id: string
           white_player?: string | null
+          white_time_remaining?: number
         }
         Update: {
           black_player?: string | null
+          black_time_remaining?: number
+          clock_history?: Json | null
           created_at?: string
           id?: string
+          increment?: number
+          last_move_timestamp?: string | null
           pgn?: string | null
           result?: string | null
           status?: string
+          time_control?: number
           user_id?: string
           white_player?: string | null
+          white_time_remaining?: number
         }
         Relationships: []
       }
@@ -85,6 +68,7 @@ export type Database = {
           fen_before: string
           game_id: string
           id: number
+          is_flagged: boolean
           move: string
           move_number: number
         }
@@ -95,6 +79,7 @@ export type Database = {
           fen_before: string
           game_id: string
           id?: number
+          is_flagged?: boolean
           move: string
           move_number: number
         }
@@ -105,6 +90,7 @@ export type Database = {
           fen_before?: string
           game_id?: string
           id?: number
+          is_flagged?: boolean
           move?: string
           move_number?: number
         }
@@ -333,3 +319,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Chess } from "chess.js";
@@ -20,6 +20,8 @@ import { GameControls } from "@/components/game-controls";
 import { getBestMove, terminateEngine } from "@/lib/engine/stockfish";
 import { useReviewableGame } from "@/lib/hooks/useReviewableGame";
 import { GameResult } from "../api/games/[gameId]/route";
+import { useFlaggedMoves } from "@/lib/hooks/useFlaggedMoves";
+import { useToggleFlag } from "@/lib/hooks/useToggleFlag";
 
 export default function PlayPage() {
   const router = useRouter();
@@ -50,6 +52,26 @@ export default function PlayPage() {
   const urlGameId = searchParams.get("gameId");
 
   const moveHistory = formatMoveHistory(fullSanHistory);
+
+  // ------------------------------------------------------------
+  // Flagged moves (React Query)
+  // ------------------------------------------------------------
+  const { data: flaggedPlies = [] } = useFlaggedMoves(gameId ?? undefined);
+  const toggleFlagMutation = useToggleFlag(gameId ?? undefined);
+
+  const flaggedSet = useMemo(() => new Set(flaggedPlies), [flaggedPlies]);
+
+  const moveHistoryWithFlags = useMemo(() => {
+    return moveHistory.map((m) => {
+      const whiteIdx = (m.moveNumber - 1) * 2;
+      const blackIdx = whiteIdx + 1;
+      return {
+        ...m,
+        whiteFlagged: flaggedSet.has(whiteIdx),
+        blackFlagged: flaggedSet.has(blackIdx),
+      };
+    });
+  }, [moveHistory, flaggedSet]);
 
   // ------------------------------------------------------------
   // React-Query: load existing game (if ?gameId=)
@@ -376,7 +398,14 @@ export default function PlayPage() {
           />
 
           {/* Move History */}
-          <MoveHistory moves={moveHistory} currentPly={currentPly} onSelect={goToPly} />
+          <MoveHistory
+            moves={moveHistoryWithFlags}
+            currentPly={currentPly}
+            onSelect={goToPly}
+            onToggleFlag={(ply, currently) =>
+              toggleFlagMutation.mutate({ ply, currentlyFlagged: currently })
+            }
+          />
 
           {/* AI Analysis */}
           <AIAnalysis analysis={analysis} />

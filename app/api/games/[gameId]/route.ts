@@ -1,6 +1,7 @@
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { Chess } from "chess.js";
 
 const GameStatusSchema = z.enum(["in_progress", "completed"]);
 
@@ -115,6 +116,83 @@ export async function PUT(
     if (error) {
         console.error(error);
         return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // -------------------------------------------------------------------------
+    // Persist newly added moves into `move_history`
+    // -------------------------------------------------------------------------
+    if (pgn) {
+        try {
+            // 1. Figure out how many moves we already have stored for this game
+            const { count: existingCount, error: countError } = await supabase
+                .from("move_history")
+                .select("id", { count: "exact", head: true })
+                .eq("game_id", (await params).gameId);
+
+            if (countError) {
+                console.error("move_history count error", countError);
+                // We still succeed in updating the game even if the move persistence fails
+            }
+
+            const alreadyStored = existingCount ?? 0;
+
+            // 2. Re-parse the PGN so we can capture FENs before/after every ply
+            //    We parse once to get the move list, then replay to capture FENs.
+            const chessLoaded = new Chess();
+            chessLoaded.loadPgn(pgn);
+            const verboseMoves = chessLoaded.history({ verbose: true });
+
+            // Nothing to do if no new moves
+            if (verboseMoves.length <= alreadyStored) {
+                return NextResponse.json(data);
+            }
+
+            // 3. Replay from the start to collect rows only for the moves we need to insert
+            const rowsToInsert: {
+                game_id: string;
+                move_number: number;
+                move: string;
+                fen_before: string;
+                fen_after: string;
+            }[] = [];
+
+            const chessReplay = new Chess();
+            for (let i = 0; i < verboseMoves.length; i++) {
+                const move = verboseMoves[i];
+
+                if (i < alreadyStored) {
+                    // Fast-forward without creating rows — we already have them
+                    chessReplay.move(move);
+                    continue;
+                }
+
+                const fen_before = chessReplay.fen();
+                chessReplay.move(move);
+                const fen_after = chessReplay.fen();
+
+                rowsToInsert.push({
+                    game_id: (await params).gameId,
+                    move_number: i + 1, // 1-based
+                    move: move.san,
+                    fen_before,
+                    fen_after,
+                });
+            }
+
+            if (rowsToInsert.length > 0) {
+                const { error: insertError } = await supabase
+                    .from("move_history")
+                    .insert(rowsToInsert);
+
+                if (insertError) {
+                    console.error("move_history insert error", insertError);
+                    // We swallow the error to avoid breaking the game update flow.
+                }
+            }
+        } catch (err) {
+            console.error("Failed to persist move_history", err);
+            // Do not fail the request; the game update has succeeded.
+        }
     }
 
     return NextResponse.json(data);

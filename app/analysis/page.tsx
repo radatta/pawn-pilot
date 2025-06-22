@@ -16,6 +16,7 @@ import { useChessClock } from "@/lib/hooks/useChessClock";
 import { formatMoveHistory } from "@/lib/utils/format-move-history";
 import { TwoPaneLayout } from "@/components/two-pane-layout";
 import { GameHeader } from "@/components/game-header";
+import { useFlaggedMoves } from "@/lib/hooks/useFlaggedMoves";
 
 export default function AnalysisPage() {
   const searchParams = useSearchParams();
@@ -28,6 +29,22 @@ export default function AnalysisPage() {
   const clock = useChessClock({ start: 300, increment: 0 });
 
   const moveHistory = formatMoveHistory(fullSanHistory);
+
+  // Flagged moves
+  const { data: flaggedPlies = [] } = useFlaggedMoves(gameId ?? undefined);
+  const flaggedSet = useMemo(() => new Set(flaggedPlies), [flaggedPlies]);
+
+  const moveHistoryWithFlags = useMemo(() => {
+    return moveHistory.map((m) => {
+      const whiteIdx = (m.moveNumber - 1) * 2;
+      const blackIdx = whiteIdx + 1;
+      return {
+        ...m,
+        whiteFlagged: flaggedSet.has(whiteIdx),
+        blackFlagged: flaggedSet.has(blackIdx),
+      };
+    });
+  }, [moveHistory, flaggedSet]);
 
   // --------------------------------------------------------------------
   // Memoised FEN & normalisation helpers
@@ -101,7 +118,11 @@ export default function AnalysisPage() {
               blackTimeRemaining={clock.black}
               gameOver={true}
             />
-            <MoveHistory moves={moveHistory} currentPly={currentPly} onSelect={goToPly} />
+            <MoveHistory
+              moves={moveHistoryWithFlags}
+              currentPly={currentPly}
+              onSelect={goToPly}
+            />
             <AIAnalysis analysis={analysis} isThinking={isThinking} />
           </>
         }
