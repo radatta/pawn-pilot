@@ -161,6 +161,39 @@ export default function PlayPage() {
     });
   };
 
+  // ------------------------------------------------------------
+  // Centralized evaluation of game-over conditions
+  // ------------------------------------------------------------
+  const evaluateGameOver = (g: Chess): GameResult | null => {
+    if (!g.isGameOver()) return null;
+
+    let result: GameResult;
+    if (g.isCheckmate()) {
+      result = "checkmate";
+      setAnalysis(
+        g.turn() === "w" ? "Black wins by checkmate!" : "White wins by checkmate!"
+      );
+    } else if (g.isStalemate()) {
+      result = "stalemate";
+      setAnalysis("Draw by stalemate.");
+    } else if (g.isThreefoldRepetition()) {
+      result = "threefold_repetition";
+      setAnalysis("Draw by threefold repetition.");
+    } else if (g.isInsufficientMaterial()) {
+      result = "insufficient_material";
+      setAnalysis("Draw by insufficient material.");
+    } else if (g.isDraw()) {
+      result = "draw";
+      setAnalysis("Draw.");
+    } else {
+      result = "draw";
+      setAnalysis("Game over.");
+    }
+
+    setGameResult(result);
+    return result;
+  };
+
   // Function to update game state via API
   const updateGame = async (newGame: Chess) => {
     // Calculate time spent on move
@@ -198,28 +231,12 @@ export default function PlayPage() {
     // Optimistically update UI first
     updateGameExternal(newGame);
 
-    // Check for game over and set analysis message
-    if (newGame.isGameOver()) {
-      if (newGame.isCheckmate()) {
-        setAnalysis(
-          newGame.turn() === "w" ? "Black wins by checkmate!" : "White wins by checkmate!"
-        );
-      } else if (newGame.isStalemate()) {
-        setAnalysis("Draw by stalemate.");
-        setGameResult("draw");
-      } else if (newGame.isThreefoldRepetition()) {
-        setAnalysis("Draw by threefold repetition.");
-        setGameResult("threefold_repetition");
-      } else if (newGame.isInsufficientMaterial()) {
-        setAnalysis("Draw by insufficient material.");
-        setGameResult("insufficient_material");
-      } else if (newGame.isDraw()) {
-        setAnalysis("Draw.");
-        setGameResult("draw");
-      } else {
-        setAnalysis("Game over.");
-        setGameResult("draw");
-      }
+    // Evaluate game-over conditions (may set result)
+    const finalResult = evaluateGameOver(newGame);
+
+    // If the game ended because of this move, persist the completion result
+    if (finalResult) {
+      handleCompleteGame(finalResult);
     }
 
     // Persist to backend (fire-and-forget)
@@ -259,32 +276,6 @@ export default function PlayPage() {
           const promotion = uci.length === 5 ? uci[4] : undefined;
           gameCopy.move({ from, to, promotion });
           updateGame(gameCopy);
-          // After AI move, check for game over and set analysis if needed
-          if (gameCopy.isGameOver()) {
-            if (gameCopy.isCheckmate()) {
-              setAnalysis(
-                gameCopy.turn() === "w"
-                  ? "Black wins by checkmate!"
-                  : "White wins by checkmate!"
-              );
-              setGameResult("checkmate");
-            } else if (gameCopy.isStalemate()) {
-              setAnalysis("Draw by stalemate.");
-              setGameResult("stalemate");
-            } else if (gameCopy.isThreefoldRepetition()) {
-              setAnalysis("Draw by threefold repetition.");
-              setGameResult("threefold_repetition");
-            } else if (gameCopy.isInsufficientMaterial()) {
-              setAnalysis("Draw by insufficient material.");
-              setGameResult("insufficient_material");
-            } else if (gameCopy.isDraw()) {
-              setAnalysis("Draw.");
-              setGameResult("draw");
-            } else {
-              setAnalysis("Game over.");
-            }
-            handleCompleteGame();
-          }
         } catch (err) {
           toast.error(err instanceof Error ? err.message : "An error occurred");
           if (err instanceof Error && err.message === "WASM not supported") {
@@ -313,10 +304,10 @@ export default function PlayPage() {
     );
   };
 
-  const handleCompleteGame = async () => {
+  const handleCompleteGame = async (finalResult: GameResult) => {
     if (!gameId) return;
     updateGameMutation.mutate(
-      { status: { completed: true }, result: gameResult },
+      { status: "completed", result: finalResult },
       {
         onSuccess: () => setAnalysis("Game completed. Congratulations!"),
         onError: (error) =>
