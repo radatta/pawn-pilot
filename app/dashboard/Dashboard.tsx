@@ -50,12 +50,17 @@ export const Dashboard = ({ userId }: DashboardProps) => {
                 <span>{game.status}</span>
                 <span>{game.result || "-"}</span>
                 <div className="flex gap-5">
-                  <Button size="sm" asChild>
-                    <Link href={`/play?gameId=${game.id}`}>Continue</Link>
-                  </Button>
-                  <Button size="sm" asChild>
-                    <Link href={`/analysis?gameId=${game.id}`}>Review</Link>
-                  </Button>
+                  {game.status !== "completed" && (
+                    <Button size="sm" asChild>
+                      <Link href={`/play?gameId=${game.id}`}>Continue</Link>
+                    </Button>
+                  )}
+
+                  {game.status === "completed" && (
+                    <Button size="sm" asChild>
+                      <Link href={`/analysis?gameId=${game.id}`}>Review</Link>
+                    </Button>
+                  )}
                 </div>
               </div>
             ))
