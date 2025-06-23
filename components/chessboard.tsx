@@ -112,6 +112,19 @@ export function Chessboard({
     }
   }
 
+  // --- Drag handlers ---
+  function onPieceDragBegin(piece: string, sourceSquare: string) {
+    if (disabled) return;
+    setSelectedSquare(sourceSquare);
+    setLegalMoves(getLegalMoves(sourceSquare));
+  }
+
+  function onPieceDragEnd() {
+    if (disabled) return;
+    setSelectedSquare(null);
+    setLegalMoves([]);
+  }
+
   // --- Highlighting ---
   const customSquareStyles: Record<string, React.CSSProperties> = {};
 
@@ -149,6 +162,8 @@ export function Chessboard({
         boardOrientation={flipped ? "black" : "white"}
         onPieceClick={onPieceClick}
         onSquareClick={onSquareClick}
+        onPieceDragBegin={onPieceDragBegin}
+        onPieceDragEnd={onPieceDragEnd}
         customSquareStyles={customSquareStyles}
         customArrows={arrows}
         arePiecesDraggable={!disabled}
