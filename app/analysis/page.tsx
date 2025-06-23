@@ -17,6 +17,7 @@ import { formatMoveHistory } from "@/lib/utils/format-move-history";
 import { TwoPaneLayout } from "@/components/two-pane-layout";
 import { GameHeader } from "@/components/game-header";
 import { useFlaggedMoves } from "@/lib/hooks/useFlaggedMoves";
+import { useGameAnalysis } from "@/lib/queries/game-analysis-tanstack";
 
 export default function AnalysisPage() {
   const searchParams = useSearchParams();
@@ -47,13 +48,18 @@ export default function AnalysisPage() {
   }, [moveHistory, flaggedSet]);
 
   // --------------------------------------------------------------------
-  // Memoised FEN & normalisation helpers
+  // Pre-computed analysis (batch) vs on-the-fly analysis
   // --------------------------------------------------------------------
+  const { data: batchAnalysis } = useGameAnalysis(gameId ?? undefined);
+
   const {
-    analysisText: analysis,
+    analysisText: liveAnalysis,
     bestMove,
-    thinking: isThinking,
+    thinking: isThinkingLive,
   } = useStockfishAnalysis(game);
+
+  const analysis = batchAnalysis ? batchAnalysis[currentPly] ?? "" : liveAnalysis;
+  const isThinking = batchAnalysis ? false : isThinkingLive;
 
   // Update displayed time when currentPly changes
   useEffect(() => {

@@ -22,6 +22,7 @@ import { useReviewableGame } from "@/lib/hooks/useReviewableGame";
 import { GameResult } from "../api/games/[gameId]/route";
 import { useFlaggedMoves } from "@/lib/hooks/useFlaggedMoves";
 import { useToggleFlag } from "@/lib/hooks/useToggleFlag";
+import { useTriggerAnalysis } from "@/lib/hooks/useTriggerAnalysis";
 
 export default function PlayPage() {
   const router = useRouter();
@@ -114,6 +115,11 @@ export default function PlayPage() {
   // React Query: generic mutation for updating a game via PUT
   // ------------------------------------------------------------
   const updateGameMutation = useUpdateGame(gameId ?? undefined);
+
+  // ------------------------------------------------------------------
+  // Mutation: trigger batch analysis when game is completed
+  // ------------------------------------------------------------------
+  const analysisMutation = useTriggerAnalysis();
 
   const handleNewGame = async () => {
     try {
@@ -296,6 +302,10 @@ export default function PlayPage() {
             "Game resigned. Don't worry - every game is a learning opportunity!"
           );
           setGameResult("resigned");
+          // Trigger batch analysis once game completed
+          if (gameId && !analysisMutation.isPending && !analysisMutation.isSuccess) {
+            analysisMutation.mutate(gameId);
+          }
         },
         onError: (error) => {
           toast.error(error instanceof Error ? error.message : "An error occurred");
@@ -312,6 +322,12 @@ export default function PlayPage() {
         onSuccess: () => setAnalysis("Game completed. Congratulations!"),
         onError: (error) =>
           toast.error(error instanceof Error ? error.message : "An error occurred"),
+        onSettled: () => {
+          // Trigger batch analysis once game completed
+          if (gameId && !analysisMutation.isPending && !analysisMutation.isSuccess) {
+            analysisMutation.mutate(gameId);
+          }
+        },
       }
     );
   };

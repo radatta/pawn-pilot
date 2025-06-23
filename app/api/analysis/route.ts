@@ -21,7 +21,7 @@ For each position, you will:
 1. Evaluate the quality and impact of the last move in one short sentence (≤15 words).
 2. ONLY IF WHITE MADE THE LAST MOVE, advise White on the best plan or next move in the current position, in one short sentence (≤15 words). If the last move was blacks's, do not advise.
 
-Here are some examples:
+Here is an example:
 
 Example 1:
 Position (FEN): "5br1/1p3kp1/p2Pbp1p/3N4/3QP3/P1P1B3/1q3PPP/R3R1K1 w - - 1 24"
