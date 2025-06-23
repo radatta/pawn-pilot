@@ -509,25 +509,24 @@ export default function PlayPage() {
               toggleFlagMutation.mutate({ ply, currentlyFlagged: currently })
             }
             onChat={async (ply) => {
+              setChatPly(ply + 1);
+              setChatOpen(true);
+
+              // compute context asynchronously
               const chessCopy = new Chess();
               chessCopy.loadPgn(game.pgn());
-              // compute fen before ply (ply is 0-based index)
-              const movesToApply = fullSanHistory.slice(0, ply);
               chessCopy.reset();
-              movesToApply.forEach((m) => chessCopy.move(m));
+              fullSanHistory.slice(0, ply).forEach((m) => chessCopy.move(m));
               const fen_before = chessCopy.fen();
               const move_san = fullSanHistory[ply] ?? "";
               const engineRes = await analyzePosition(fen_before, 12);
-              const ctx: ChatContext = {
+              setChatContext({
                 fen_before,
                 move_san,
                 pv: engineRes.pv ?? "",
                 eval_cp: engineRes.evaluationCp ?? null,
                 mate_in: engineRes.mateIn ?? null,
-              };
-              setChatContext(ctx);
-              setChatPly(ply + 1);
-              setChatOpen(true);
+              });
             }}
           />
 
@@ -536,9 +535,24 @@ export default function PlayPage() {
             <AIAnalysis analysis={analysis} />
             <div className="flex justify-end">
               <MoveChatButton
-                onClick={() => {
+                onClick={async () => {
                   setChatPly(currentPly + 1);
                   setChatOpen(true);
+
+                  const chessCopy = new Chess();
+                  chessCopy.loadPgn(game.pgn());
+                  chessCopy.reset();
+                  fullSanHistory.slice(0, currentPly).forEach((m) => chessCopy.move(m));
+                  const fen_before = chessCopy.fen();
+                  const move_san = fullSanHistory[currentPly] ?? "";
+                  const engineRes = await analyzePosition(fen_before, 12);
+                  setChatContext({
+                    fen_before,
+                    move_san,
+                    pv: engineRes.pv ?? "",
+                    eval_cp: engineRes.evaluationCp ?? null,
+                    mate_in: engineRes.mateIn ?? null,
+                  });
                 }}
               />
             </div>

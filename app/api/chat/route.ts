@@ -2,19 +2,30 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { pawnPilotSystemPrompt } from "@/lib/prompts";
+import { ChatRequestSchema } from "@/lib/validation/chat";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 export async function POST(req: NextRequest) {
     try {
-        const body = await req.json();
-        const fen = body?.fen ?? body?.fen_before as string | undefined;
-        const gameHistory = body?.gameHistory as string | undefined;
-        const pv = body?.pv as string | undefined;
-        const moveSan = body?.move_san as string | undefined;
-        const evalCp = body?.eval_cp as number | undefined;
-        const mateIn = body?.mate_in as number | undefined;
-        const messages = (body?.messages as { role: string; content: string }[]) ?? [];
-        const content = body?.content as string | undefined; // current user message
+        const parse = ChatRequestSchema.partial({ explanation: true }).safeParse(await req.json());
+        if (!parse.success) {
+            return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+        }
+        const {
+            fen_before: fen,
+            pv,
+            move_san: moveSan,
+            eval_cp: evalCp,
+            mate_in: mateIn,
+            content,
+            // accept optional legacy
+            gameHistory,
+            messages = [],
+        } = {
+            gameHistory: (parse.data as any).gameHistory,
+            messages: (parse.data as any).messages,
+            ...parse.data,
+        } as any;
 
         if (!fen || !content) {
             return NextResponse.json({ error: "Missing required parameters" }, { status: 400 });

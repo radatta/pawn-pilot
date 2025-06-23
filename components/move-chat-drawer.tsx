@@ -98,7 +98,7 @@ export const MoveChatDrawer: React.FC<MoveChatDrawerProps> = ({
             placeholder="Ask the coach…"
           />
           <Button type="submit" disabled={!input.trim() || sending}>
-            {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send"}
+            {sending ? <Loader2 className="size-4 animate-spin" /> : "Send"}
           </Button>
         </form>
       </div>
