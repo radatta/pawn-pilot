@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef, useState, useEffect } from "react";
-import { X } from "lucide-react";
+import { X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useMoveChat, ChatContext } from "@/lib/hooks/useMoveChat";
 
@@ -20,13 +20,26 @@ export const MoveChatDrawer: React.FC<MoveChatDrawerProps> = ({
   ply,
   context,
 }) => {
-  const { messages, send } = useMoveChat(gameId, ply, context);
+  const { messages, send, sending } = useMoveChat(gameId, ply, context, open);
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, open]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    if (open) window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [open]);
+
+  // Clear input when closing
+  useEffect(() => {
+    if (!open) setInput("");
+  }, [open]);
 
   if (!open) return null;
 
@@ -45,7 +58,10 @@ export const MoveChatDrawer: React.FC<MoveChatDrawerProps> = ({
         {/* messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3 text-sm">
           {messages.map((m, idx) => (
-            <div key={idx} className={m.role === "user" ? "text-right" : "text-left"}>
+            <div
+              key={m.id ?? idx}
+              className={m.role === "user" ? "text-right" : "text-left"}
+            >
               <span
                 className={
                   m.role === "user"
@@ -54,6 +70,11 @@ export const MoveChatDrawer: React.FC<MoveChatDrawerProps> = ({
                 }
               >
                 {m.content}
+                {m.created_at && (
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    {new Date(m.created_at).toLocaleTimeString()}
+                  </span>
+                )}
               </span>
             </div>
           ))}
@@ -76,8 +97,8 @@ export const MoveChatDrawer: React.FC<MoveChatDrawerProps> = ({
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask the coach…"
           />
-          <Button type="submit" disabled={!input.trim()}>
-            Send
+          <Button type="submit" disabled={!input.trim() || sending}>
+            {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send"}
           </Button>
         </form>
       </div>

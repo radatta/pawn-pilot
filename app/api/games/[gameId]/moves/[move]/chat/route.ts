@@ -117,7 +117,7 @@ Context:\n• FEN before move: ${fen_before}\n• Played move: ${sanMove}\n• S
     const { generateText } = await import("ai");
     const { openai } = await import("@ai-sdk/openai");
     const result = await generateText({
-        model: openai("gpt-4o"),
+        model: openai(process.env.OPENAI_MODEL ?? "gpt-4o"),
         system: systemPrompt,
         messages: msgs,
     });

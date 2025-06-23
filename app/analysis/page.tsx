@@ -20,6 +20,9 @@ import { useGameAnalysis, PlyAnalysis } from "@/lib/queries/game-analysis-tansta
 import { useBackfillEngineAnalysis } from "@/lib/hooks/useBackfillEngineAnalysis";
 import { MoveChatDrawer } from "@/components/move-chat-drawer";
 import { MoveChatButton } from "@/components/move-chat-button";
+import { Chess } from "chess.js";
+import { analyzePosition } from "@/lib/engine/stockfish";
+import { ChatContext } from "@/lib/hooks/useMoveChat";
 
 export default function AnalysisPage() {
   const searchParams = useSearchParams();
@@ -141,6 +144,25 @@ export default function AnalysisPage() {
 
   const [chatOpen, setChatOpen] = useState(false);
   const [chatPly, setChatPly] = useState<number>(1);
+  const [chatContext, setChatContext] = useState<ChatContext | null>(null);
+
+  const buildContext = async (ply: number) => {
+    const chessCopy = new Chess();
+    chessCopy.loadPgn(game.pgn());
+    chessCopy.reset();
+    fullSanHistory.slice(0, ply).forEach((m) => chessCopy.move(m));
+    const fen_before = chessCopy.fen();
+    const move_san = fullSanHistory[ply] ?? "";
+    const engineRes = await analyzePosition(fen_before, 12);
+    const ctx: ChatContext = {
+      fen_before,
+      move_san,
+      pv: engineRes.pv ?? "",
+      eval_cp: engineRes.evaluationCp ?? null,
+      mate_in: engineRes.mateIn ?? null,
+    };
+    setChatContext(ctx);
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -170,7 +192,8 @@ export default function AnalysisPage() {
               <AIAnalysis analysis={analysis} isThinking={isThinking} />
               <div className="flex justify-end">
                 <MoveChatButton
-                  onClick={() => {
+                  onClick={async () => {
+                    await buildContext(currentPly);
                     setChatPly(currentPly + 1);
                     setChatOpen(true);
                   }}
@@ -182,7 +205,7 @@ export default function AnalysisPage() {
               onClose={() => setChatOpen(false)}
               gameId={gameId}
               ply={chatPly}
-              context={undefined}
+              context={chatContext ?? undefined}
             />
           </>
         }

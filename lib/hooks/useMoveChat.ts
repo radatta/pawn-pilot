@@ -19,7 +19,8 @@ export interface ChatContext {
 export function useMoveChat(
     gameId: string | null,
     ply: number,
-    context?: ChatContext,
+    context: ChatContext | undefined,
+    open: boolean,
 ) {
     const queryClient = useQueryClient();
     const queryKey = ["moveChat", gameId ?? "live", ply];
@@ -34,14 +35,16 @@ export function useMoveChat(
             return json.messages as ChatMessage[];
         },
         staleTime: 0,
+        enabled: !!gameId && open,
     });
 
     const mutation = useMutation({
         mutationFn: async (content: string) => {
-            // Optimistically add user message
+            // temp id to ensure unique key
+            const tempId = Date.now();
             queryClient.setQueryData<ChatMessage[]>(queryKey, (old = []) => [
                 ...old,
-                { role: "user", content },
+                { role: "user", content, id: tempId },
             ]);
 
             const basePayload = { content, ...(context ?? {}) };
@@ -57,10 +60,14 @@ export function useMoveChat(
             const json = await res.json();
             // Update cache with assistant message
             queryClient.setQueryData<ChatMessage[]>(queryKey, (old = []) => [
-                ...old,
-                { role: json.role, content: json.content },
+                ...(old ?? []).map((m) => (m.id === tempId ? m : m)),
+                { role: json.role as "assistant", content: json.content, id: tempId + 1 },
             ]);
             return json;
+        },
+        onError: () => {
+            // rollback optimistic
+            queryClient.invalidateQueries({ queryKey });
         },
     });
 
@@ -68,5 +75,6 @@ export function useMoveChat(
         messages: query.data ?? [],
         isLoading: query.isLoading,
         send: mutation.mutateAsync,
+        sending: mutation.isPending,
     };
 } 

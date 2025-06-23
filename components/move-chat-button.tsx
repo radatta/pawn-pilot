@@ -12,16 +12,15 @@ interface MoveChatButtonProps {
 export const MoveChatButton: React.FC<MoveChatButtonProps> = ({
   onClick,
   disabled = false,
-}) => {
-  return (
-    <Button
-      variant="ghost"
-      size="icon"
-      onClick={onClick}
-      disabled={disabled}
-      className="text-muted-foreground hover:text-foreground"
-    >
-      <MessageCircle className="w-4 h-4" />
-    </Button>
-  );
-};
+}) => (
+  <Button
+    variant="ghost"
+    size="icon"
+    onClick={onClick}
+    disabled={disabled}
+    title="Ask the coach about this move"
+    className="text-muted-foreground hover:text-foreground"
+  >
+    <MessageCircle className="w-4 h-4" />
+  </Button>
+);

@@ -107,11 +107,7 @@ export function MoveHistory({
                   )}
 
                   {/* Chat button at end of row */}
-                  {onChat && (
-                    <MoveChatButton
-                      onClick={() => onChat(whiteActive ? whiteIdx : blackIdx)}
-                    />
-                  )}
+                  {onChat && <MoveChatButton onClick={() => onChat(whiteIdx)} />}
                 </div>
               );
             })
