@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
+import { pawnPilotSystemPrompt } from "@/lib/prompts";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 export async function POST(req: NextRequest) {
@@ -19,18 +20,16 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Missing required parameters" }, { status: 400 });
         }
 
-        const details = [
+        const contextLines = [
             `Position (FEN): ${fen}`,
             moveSan ? `Played move: ${moveSan}` : null,
             evalCp !== undefined ? `Stockfish eval: ${evalCp}` : null,
             mateIn !== undefined ? `Mate in: ${mateIn}` : null,
             pv ? `PV line: ${pv}` : null,
             gameHistory ? `Game History: ${gameHistory}` : null,
-        ]
-            .filter(Boolean)
-            .join("\n• ");
+        ];
 
-        const systemPrompt = `You are PawnPilot, a grand-master chess coach.\nContext:\n• ${details}\n\nAnswer questions in ≤3 sentences unless asked for more detail.`;
+        const systemPrompt = pawnPilotSystemPrompt(contextLines);
 
         const allMsgs = [...messages, { role: "user", content }];
 

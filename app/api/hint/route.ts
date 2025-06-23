@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { openai } from "@ai-sdk/openai";
 import { generateText } from "ai";
+import { hintPrompt } from "@/lib/prompts";
 
 export async function GET(req: NextRequest) {
     try {
@@ -11,12 +12,8 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: "Missing 'fen' query parameter" }, { status: 400 });
         }
 
-        // Prompt: suggest the strongest continuation from the current position
-        const prompt = `You are a grandmaster-level chess coach.
-
-Position (FEN): "${fen}"
-
-Suggest the strongest continuation for the side to move and briefly explain why (≤30 words).`;
+        // Use centralized hint prompt
+        const prompt = hintPrompt(fen);
 
         const result = await generateText({ model: openai("gpt-4o"), prompt });
         // According to the ai SDK typings, the generated text is exposed via the "text" key

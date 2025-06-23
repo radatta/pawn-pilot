@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withErrorHandling } from "@/lib/utils/api-error-wrapper";
 import { createSupabaseServer } from "@/lib/supabase/server";
+import { pawnPilotSystemPrompt } from "@/lib/prompts";
 
 export const GET = withErrorHandling(async function GET(
     _req: NextRequest,
@@ -95,9 +96,14 @@ export const POST = withErrorHandling(async function POST(
     const mateIn = suppliedMate;
     const explanation = suppliedExplanation ?? analysisRow?.explanation ?? "";
 
-    // Build system prompt
-    const systemPrompt = `You are PawnPilot, a grand-master chess coach.
-Context:\n• FEN before move: ${fen_before}\n• Played move: ${sanMove}\n• Stockfish eval: ${evalCp ?? "—"} | Mate: ${mateIn !== null ? "M" + mateIn : "—"}\n• PV line: ${pv ?? ""}\n• Existing explanation: ${explanation}\n\nAnswer questions in ≤3 sentences unless asked for more detail.`;
+    // Build system prompt using centralized helper
+    const systemPrompt = pawnPilotSystemPrompt([
+        `FEN before move: ${fen_before}`,
+        `Played move: ${sanMove}`,
+        `Stockfish eval: ${evalCp ?? "—"} | Mate: ${mateIn !== null ? "M" + mateIn : "—"}`,
+        `PV line: ${pv ?? ""}`,
+        `Existing explanation: ${explanation}`,
+    ]);
 
     // Build message history (last 20 messages)
     const { data: history } = await supabase
