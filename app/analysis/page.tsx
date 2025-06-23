@@ -23,7 +23,8 @@ export default function AnalysisPage() {
   const gameId = searchParams.get("gameId");
   const supabase = useSupabaseBrowser();
 
-  const { game, updateGameExternal, goToPly, fullSanHistory, currentPly, loadPGN } =
+  const pgnParam = decodeURIComponent(searchParams.get("pgn") ?? "");
+    useReviewableGame({ pgn: pgnParam });
     useReviewableGame();
 
   const clock = useChessClock({ start: 300, increment: 0 });

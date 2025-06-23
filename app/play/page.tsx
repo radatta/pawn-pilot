@@ -427,7 +427,11 @@ export default function PlayPage() {
           {/* Post-game Actions */}
           {gameResult && gameId && (
             <Button asChild size="sm" className="w-full">
-              <Link href={`/analysis?gameId=${gameId}`}>Go to Analysis</Link>
+              <Link
+                href={`/analysis?gameId=${gameId}&pgn=${encodeURIComponent(game.pgn())}`}
+              >
+                Go to Analysis
+              </Link>
             </Button>
           )}
         </div>
