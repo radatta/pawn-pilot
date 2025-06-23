@@ -16,7 +16,8 @@ import { formatMoveHistory } from "@/lib/utils/format-move-history";
 import { TwoPaneLayout } from "@/components/two-pane-layout";
 import { GameHeader } from "@/components/game-header";
 import { useFlaggedMoves } from "@/lib/hooks/useFlaggedMoves";
-import { useGameAnalysis } from "@/lib/queries/game-analysis-tanstack";
+import { useGameAnalysis, PlyAnalysis } from "@/lib/queries/game-analysis-tanstack";
+import { useBackfillEngineAnalysis } from "@/lib/hooks/useBackfillEngineAnalysis";
 
 export default function AnalysisPage() {
   const searchParams = useSearchParams();
@@ -24,8 +25,8 @@ export default function AnalysisPage() {
   const supabase = useSupabaseBrowser();
 
   const pgnParam = decodeURIComponent(searchParams.get("pgn") ?? "");
+  const { game, updateGameExternal, goToPly, fullSanHistory, currentPly, loadPGN } =
     useReviewableGame({ pgn: pgnParam });
-    useReviewableGame();
 
   const clock = useChessClock({ start: 300, increment: 0 });
 
@@ -52,13 +53,41 @@ export default function AnalysisPage() {
   // --------------------------------------------------------------------
   const { data: batchAnalysis } = useGameAnalysis(gameId ?? undefined);
 
-  const analysis = batchAnalysis
-    ? batchAnalysis[currentPly] ?? ""
-    : "Generating analysis…";
-  const isThinking = !batchAnalysis;
+  const currentAnalysis: PlyAnalysis | null =
+    currentPly >= 0 && batchAnalysis ? batchAnalysis[currentPly] ?? null : null;
 
-  // Best-move arrows are no longer available without live Stockfish; disable.
-  const bestMove: string | null = null;
+  const analysis = useMemo(() => {
+    if (currentPly < 0) return "Select a move or use ← → keys to view insights.";
+
+    if (!currentAnalysis) return "Generating analysis…";
+
+    const parts: string[] = [];
+    parts.push(currentAnalysis.explanation);
+
+    const details: string[] = [];
+    if (currentAnalysis.best_move) details.push(`Best: ${currentAnalysis.best_move}`);
+    if (currentAnalysis.mate_in !== null && currentAnalysis.mate_in !== undefined) {
+      details.push(`Mate in ${currentAnalysis.mate_in}`);
+    } else if (
+      currentAnalysis.eval_cp !== null &&
+      currentAnalysis.eval_cp !== undefined
+    ) {
+      const cp = (game.turn() === "w" ? 1 : -1) * (currentAnalysis.eval_cp / 100);
+      details.push(`Eval: ${cp.toFixed(2)}`);
+    }
+    if (details.length) parts.push(details.join(" | "));
+    return parts.join("\n");
+  }, [currentAnalysis, game]);
+
+  const isThinking = currentPly >= 0 && (!currentAnalysis || !currentAnalysis.best_move);
+
+  const bestMove = currentAnalysis?.best_move ?? null;
+
+  useBackfillEngineAnalysis({
+    gameId,
+    sanHistory: fullSanHistory,
+    analysis: batchAnalysis,
+  });
 
   // Update displayed time when currentPly changes
   useEffect(() => {
@@ -72,11 +101,11 @@ export default function AnalysisPage() {
     // Only draw an arrow when the engine provides a standard LAN move (e.g. "e2e4" or "e7e8q").
     // Stockfish returns "(none)" when no legal moves are available which would otherwise
     // produce invalid square coordinates and trigger React warnings (NaN SVG attributes).
-    if (!bestMove) return undefined;
+    if (currentPly < 0 || !bestMove) return undefined;
 
     // Match the first four characters representing the from and to squares.
     // This covers normal moves ("e2e4") as well as promotions ("e7e8q").
-    const match = bestMove.match(/^([a-h][1-8])([a-h][1-8])/);
+    const match = (bestMove as string).match(/^([a-h][1-8])([a-h][1-8])/);
     if (!match) return undefined;
 
     const from = match[1] as Square;

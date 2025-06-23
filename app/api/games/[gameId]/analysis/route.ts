@@ -196,6 +196,58 @@ export const GET = withErrorHandling(async function GET(
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const analysis = (data ?? []).map((row) => row.explanation ?? "");
+    const analysis = (data ?? []).map((row) => ({
+        explanation: row.explanation ?? "",
+        best_move: (row as { best_move?: string }).best_move ?? null,
+        eval_cp: (row as { eval_cp?: number | null }).eval_cp ?? null,
+        mate_in: (row as { mate_in?: number | null }).mate_in ?? null,
+    }));
+
     return NextResponse.json({ analysis });
+});
+
+// ------------------------------------------------------------------
+// PUT  /api/games/[gameId]/analysis  – bulk update engine fields
+// Body: { updates: { move_number: number; best_move: string; eval_cp?: number; mate_in?: number }[] }
+// ------------------------------------------------------------------
+export const PUT = withErrorHandling(async function PUT(
+    req: NextRequest,
+    { params }: { params: { gameId: string } }
+) {
+    const { gameId } = await params;
+    if (!gameId) {
+        return NextResponse.json({ error: "Missing gameId" }, { status: 400 });
+    }
+
+    const supabase = await createSupabaseServer();
+
+    const body = await req.json();
+    const updates = body?.updates as
+        | { move_number: number; best_move: string; eval_cp?: number; mate_in?: number }[]
+        | undefined;
+
+    if (!updates || !Array.isArray(updates) || updates.length === 0) {
+        return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+    }
+
+    // Build rows
+    const rows = updates.map((u) => ({
+        game_id: gameId,
+        move_number: u.move_number,
+        best_move: u.best_move,
+        eval_cp: u.eval_cp ?? null,
+        mate_in: u.mate_in ?? null,
+    }));
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await supabase.from("move_analysis").upsert(rows as any, {
+        onConflict: "game_id,move_number",
+    });
+
+    if (error) {
+        console.error("[ANALYZE] PUT upsert engine info error", error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ updated: rows.length });
 }); 
