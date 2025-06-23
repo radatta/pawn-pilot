@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withErrorHandling } from "@/lib/utils/api-error-wrapper";
 import { createSupabaseServer } from "@/lib/supabase/server";
 
-export async function POST(request: NextRequest) {
+export const POST = withErrorHandling(async function POST(request: NextRequest) {
     const { email } = await request.json();
 
     if (!email) {
@@ -19,4 +20,4 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ message: "Reset email sent" }, { status: 200 });
-} 
+}); 

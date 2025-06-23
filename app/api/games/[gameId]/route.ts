@@ -1,4 +1,5 @@
 import { createSupabaseServer } from "@/lib/supabase/server";
+import { withErrorHandling } from "@/lib/utils/api-error-wrapper";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { Chess } from "chess.js";
@@ -29,7 +30,7 @@ const BodySchema = z.object({
     clock_history: ClockHistorySchema.optional(),
 });
 
-export async function GET(
+export const GET = withErrorHandling(async function GET(
     req: Request,
     { params }: { params: { gameId: string } }
 ) {
@@ -54,9 +55,9 @@ export async function GET(
     }
 
     return NextResponse.json(data);
-}
+});
 
-export async function PUT(
+export const PUT = withErrorHandling(async function PUT(
     req: Request,
     { params }: { params: { gameId: string } }
 ) {
@@ -199,4 +200,4 @@ export async function PUT(
     }
 
     return NextResponse.json(data);
-} 
+}); 

@@ -1,7 +1,8 @@
 import { createSupabaseServer } from "@/lib/supabase/server";
+import { withErrorHandling } from "@/lib/utils/api-error-wrapper";
 import { NextResponse } from "next/server";
 
-export async function POST(req: Request) {
+export const POST = withErrorHandling(async function POST(req: Request) {
     const supabase = await createSupabaseServer();
     const {
         data: { user },
@@ -51,4 +52,4 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json(data);
-}
+});
