@@ -11,7 +11,6 @@ import { terminateEngine } from "@/lib/engine/stockfish";
 import { useReviewableGame } from "@/lib/hooks/useReviewableGame";
 import useSupabaseBrowser from "@/lib/supabase/client";
 import { useGameById } from "@/lib/queries/game-tanstack";
-import { useStockfishAnalysis } from "@/lib/hooks/useStockfishAnalysis";
 import { useChessClock } from "@/lib/hooks/useChessClock";
 import { formatMoveHistory } from "@/lib/utils/format-move-history";
 import { TwoPaneLayout } from "@/components/two-pane-layout";
@@ -52,14 +51,13 @@ export default function AnalysisPage() {
   // --------------------------------------------------------------------
   const { data: batchAnalysis } = useGameAnalysis(gameId ?? undefined);
 
-  const {
-    analysisText: liveAnalysis,
-    bestMove,
-    thinking: isThinkingLive,
-  } = useStockfishAnalysis(game);
+  const analysis = batchAnalysis
+    ? batchAnalysis[currentPly] ?? ""
+    : "Generating analysis…";
+  const isThinking = !batchAnalysis;
 
-  const analysis = batchAnalysis ? batchAnalysis[currentPly] ?? "" : liveAnalysis;
-  const isThinking = batchAnalysis ? false : isThinkingLive;
+  // Best-move arrows are no longer available without live Stockfish; disable.
+  const bestMove: string | null = null;
 
   // Update displayed time when currentPly changes
   useEffect(() => {

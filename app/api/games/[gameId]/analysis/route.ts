@@ -5,6 +5,7 @@ import { createSupabaseServer } from "@/lib/supabase/server";
 import { Chess } from "chess.js";
 import { openai } from "@ai-sdk/openai";
 import { generateText } from "ai";
+import type { Database } from "@/lib/database.types";
 
 // Helper: convert SAN moves array to a single PGN-like string "1. e4 e5 2. ..."
 function movesArrayToString(moves: string[]): string {
@@ -116,22 +117,25 @@ export const POST = withErrorHandling(async function POST(req: NextRequest, { pa
                 console.debug("[ANALYZE] Analysis completed for game", gameId);
 
                 // ------------------------------------------------------------------
-                // Persist explanations into move_history.explanation
+                // Persist explanations into move_analysis
                 // ------------------------------------------------------------------
                 (async () => {
                     try {
-                        await Promise.all(
-                            results.map(async (explanation, idx) => {
-                                const { error: updErr } = await supabase
-                                    .from("move_history")
-                                    .update({ explanation })
-                                    .eq("game_id", gameId)
-                                    .eq("move_number", idx + 1);
-                                if (updErr) {
-                                    console.error(`[ANALYZE] Update error ply ${idx + 1}`, updErr);
-                                }
-                            })
-                        );
+                        // Upsert explanations into move_analysis
+                        type Row = Database["public"]["Tables"]["move_analysis"]["Insert"];
+                        const rows: Row[] = results.map((explanation, idx) => ({
+                            game_id: gameId,
+                            move_number: idx + 1,
+                            explanation,
+                        }));
+
+                        const { error: upErr } = await supabase
+                            .from("move_analysis")
+                            .upsert(rows, { onConflict: "game_id,move_number" });
+
+                        if (upErr) {
+                            console.error("[ANALYZE] move_analysis upsert error", upErr);
+                        }
                         console.debug("[ANALYZE] Explanations persisted");
                     } catch (e) {
                         console.error("[ANALYZE] Persist explanations failed", e);
@@ -182,8 +186,8 @@ export const GET = withErrorHandling(async function GET(
     const supabase = await createSupabaseServer();
 
     const { data, error } = await supabase
-        .from("move_history")
-        .select("move_number, explanation")
+        .from("move_analysis")
+        .select("move_number, explanation, best_move, eval_cp, mate_in")
         .eq("game_id", gameId)
         .order("move_number");
 

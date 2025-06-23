@@ -60,10 +60,50 @@ export type Database = {
         }
         Relationships: []
       }
+      move_analysis: {
+        Row: {
+          best_move: string | null
+          created_at: string
+          eval_cp: number | null
+          explanation: string | null
+          game_id: string
+          id: number
+          mate_in: number | null
+          move_number: number
+        }
+        Insert: {
+          best_move?: string | null
+          created_at?: string
+          eval_cp?: number | null
+          explanation?: string | null
+          game_id: string
+          id?: number
+          mate_in?: number | null
+          move_number: number
+        }
+        Update: {
+          best_move?: string | null
+          created_at?: string
+          eval_cp?: number | null
+          explanation?: string | null
+          game_id?: string
+          id?: number
+          mate_in?: number | null
+          move_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "move_analysis_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       move_history: {
         Row: {
           created_at: string
-          explanation: string | null
           fen_after: string
           fen_before: string
           game_id: string
@@ -74,7 +114,6 @@ export type Database = {
         }
         Insert: {
           created_at?: string
-          explanation?: string | null
           fen_after: string
           fen_before: string
           game_id: string
@@ -85,7 +124,6 @@ export type Database = {
         }
         Update: {
           created_at?: string
-          explanation?: string | null
           fen_after?: string
           fen_before?: string
           game_id?: string
