@@ -264,14 +264,20 @@ export default function PlayPage() {
       handleCompleteGame(finalResult);
     }
 
-    // Persist to backend (fire-and-forget)
+    // Persist to backend (fire-and-forget) **only**
+    // – after the AI (Black) move, i.e. when it's White's turn again, so we
+    //   bundle the user's and the engine's moves in one request
+    // – or immediately if the game just ended on the current move
     if (!gameId) return;
-    updateGameMutation.mutate({
-      pgn: newGame.pgn(),
-      ...timeUpdate,
-      last_move_timestamp: now.toISOString(),
-      clock_history: newClockHistory,
-    });
+
+    if (newGame.turn() === "w" || finalResult !== null) {
+      updateGameMutation.mutate({
+        pgn: newGame.pgn(),
+        ...timeUpdate,
+        last_move_timestamp: now.toISOString(),
+        clock_history: newClockHistory,
+      });
+    }
   };
 
   // Only allow the engine to move when we are on the latest ply (i.e., not navigating history)
