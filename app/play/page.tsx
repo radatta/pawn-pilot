@@ -90,11 +90,30 @@ export default function PlayPage() {
 
       updateGameExternal(loadedGame);
 
-      setWhiteTimeRemaining(g.white_time_remaining || 300);
-      setBlackTimeRemaining(g.black_time_remaining || 300);
+      // --------------------------------------------------------
+      // Sync clocks – account for time elapsed since last move
+      // --------------------------------------------------------
+      let whiteRemaining = g.white_time_remaining ?? 300;
+      let blackRemaining = g.black_time_remaining ?? 300;
+
       if (g.last_move_timestamp) {
-        setLastMoveTimestamp(new Date(g.last_move_timestamp));
+        const lastTs = new Date(g.last_move_timestamp);
+
+        const elapsedSeconds = Math.floor((Date.now() - lastTs.getTime()) / 1000);
+
+        // Whose turn is it? loadedGame.turn() returns 'w' | 'b'
+        if (loadedGame.turn() === "w") {
+          whiteRemaining = Math.max(0, whiteRemaining - elapsedSeconds);
+        } else {
+          blackRemaining = Math.max(0, blackRemaining - elapsedSeconds);
+        }
+
+        // After adjusting for elapsed time, treat NOW as the new reference point
+        setLastMoveTimestamp(new Date());
       }
+
+      setWhiteTimeRemaining(whiteRemaining);
+      setBlackTimeRemaining(blackRemaining);
       setClockHistory(g.clock_history || [{ white: 300, black: 300 }]);
 
       if (g.status === "completed") {
