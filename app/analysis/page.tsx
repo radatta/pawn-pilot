@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { GameStatus } from "@/components/game-status";
 import { Chessboard } from "@/components/chessboard";
@@ -18,6 +18,8 @@ import { GameHeader } from "@/components/game-header";
 import { useFlaggedMoves } from "@/lib/hooks/useFlaggedMoves";
 import { useGameAnalysis, PlyAnalysis } from "@/lib/queries/game-analysis-tanstack";
 import { useBackfillEngineAnalysis } from "@/lib/hooks/useBackfillEngineAnalysis";
+import { MoveChatDrawer } from "@/components/move-chat-drawer";
+import { MoveChatButton } from "@/components/move-chat-button";
 
 export default function AnalysisPage() {
   const searchParams = useSearchParams();
@@ -137,6 +139,9 @@ export default function AnalysisPage() {
     return () => terminateEngine();
   }, []);
 
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatPly, setChatPly] = useState<number>(1);
+
   return (
     <div className="min-h-screen bg-background">
       <GameHeader backHref="/dashboard" title="PawnPilot Analysis" />
@@ -156,8 +161,29 @@ export default function AnalysisPage() {
               moves={moveHistoryWithFlags}
               currentPly={currentPly}
               onSelect={goToPly}
+              onChat={(ply) => {
+                setChatPly(ply + 1);
+                setChatOpen(true);
+              }}
             />
-            <AIAnalysis analysis={analysis} isThinking={isThinking} />
+            <div className="space-y-2">
+              <AIAnalysis analysis={analysis} isThinking={isThinking} />
+              <div className="flex justify-end">
+                <MoveChatButton
+                  onClick={() => {
+                    setChatPly(currentPly + 1);
+                    setChatOpen(true);
+                  }}
+                />
+              </div>
+            </div>
+            <MoveChatDrawer
+              open={chatOpen}
+              onClose={() => setChatOpen(false)}
+              gameId={gameId}
+              ply={chatPly}
+              context={undefined}
+            />
           </>
         }
       />

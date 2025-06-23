@@ -101,6 +101,41 @@ export type Database = {
           },
         ]
       }
+      move_chat: {
+        Row: {
+          content: string
+          created_at: string | null
+          game_id: string | null
+          id: number
+          move_number: number
+          role: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          game_id?: string | null
+          id?: number
+          move_number: number
+          role: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          game_id?: string | null
+          id?: number
+          move_number?: number
+          role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_game"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       move_history: {
         Row: {
           created_at: string

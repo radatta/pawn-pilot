@@ -2,6 +2,7 @@
 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Star } from "lucide-react";
+import { MoveChatButton } from "@/components/move-chat-button";
 
 interface Move {
   moveNumber: number;
@@ -19,6 +20,8 @@ interface MoveHistoryProps {
   onSelect?: (ply: number) => void;
   /** Optional callback to toggle flag */
   onToggleFlag?: (ply: number, currentlyFlagged: boolean) => void;
+  /** Optional callback to open chat */
+  onChat?: (ply: number) => void;
 }
 
 export function MoveHistory({
@@ -26,6 +29,7 @@ export function MoveHistory({
   currentPly = -1,
   onSelect,
   onToggleFlag,
+  onChat,
 }: MoveHistoryProps) {
   return (
     <div className="space-y-3">
@@ -100,6 +104,13 @@ export function MoveHistory({
                         />
                       </button>
                     </div>
+                  )}
+
+                  {/* Chat button at end of row */}
+                  {onChat && (
+                    <MoveChatButton
+                      onClick={() => onChat(whiteActive ? whiteIdx : blackIdx)}
+                    />
                   )}
                 </div>
               );

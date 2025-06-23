@@ -23,6 +23,9 @@ import { GameResult } from "../api/games/[gameId]/route";
 import { useFlaggedMoves } from "@/lib/hooks/useFlaggedMoves";
 import { useToggleFlag } from "@/lib/hooks/useToggleFlag";
 import { useTriggerAnalysis } from "@/lib/hooks/useTriggerAnalysis";
+import { MoveChatDrawer } from "@/components/move-chat-drawer";
+import { MoveChatButton } from "@/components/move-chat-button";
+import { ChatContext } from "@/lib/hooks/useMoveChat";
 
 export default function PlayPage() {
   const router = useRouter();
@@ -50,6 +53,9 @@ export default function PlayPage() {
   const [hintArrows, setHintArrows] = useState<[Square, Square, string][]>([]);
   const [hintLoading, setHintLoading] = useState(false);
   const [hintActive, setHintActive] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatPly, setChatPly] = useState<number>(1);
+  const [chatContext, setChatContext] = useState<ChatContext | null>(null);
 
   // Read ?gameId= from URL
   const searchParams = useSearchParams();
@@ -502,10 +508,41 @@ export default function PlayPage() {
             onToggleFlag={(ply, currently) =>
               toggleFlagMutation.mutate({ ply, currentlyFlagged: currently })
             }
+            onChat={async (ply) => {
+              const chessCopy = new Chess();
+              chessCopy.loadPgn(game.pgn());
+              // compute fen before ply (ply is 0-based index)
+              const movesToApply = fullSanHistory.slice(0, ply);
+              chessCopy.reset();
+              movesToApply.forEach((m) => chessCopy.move(m));
+              const fen_before = chessCopy.fen();
+              const move_san = fullSanHistory[ply] ?? "";
+              const engineRes = await analyzePosition(fen_before, 12);
+              const ctx: ChatContext = {
+                fen_before,
+                move_san,
+                pv: engineRes.pv ?? "",
+                eval_cp: engineRes.evaluationCp ?? null,
+                mate_in: engineRes.mateIn ?? null,
+              };
+              setChatContext(ctx);
+              setChatPly(ply + 1);
+              setChatOpen(true);
+            }}
           />
 
           {/* AI Analysis */}
-          <AIAnalysis analysis={analysis} />
+          <div className="space-y-2">
+            <AIAnalysis analysis={analysis} />
+            <div className="flex justify-end">
+              <MoveChatButton
+                onClick={() => {
+                  setChatPly(currentPly + 1);
+                  setChatOpen(true);
+                }}
+              />
+            </div>
+          </div>
 
           {/* Game Controls */}
           <GameControls
@@ -527,6 +564,15 @@ export default function PlayPage() {
               </Link>
             </Button>
           )}
+
+          {/* Chat Drawer */}
+          <MoveChatDrawer
+            open={chatOpen}
+            onClose={() => setChatOpen(false)}
+            gameId={gameId}
+            ply={chatPly}
+            context={chatContext ?? undefined}
+          />
         </div>
       </div>
     </div>
