@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Chess, Square } from "chess.js";
 import { Chessboard as ReactChessboard } from "react-chessboard";
+import Image from "next/image";
 
 interface ChessboardProps {
   game: Chess;
@@ -20,7 +21,14 @@ export function Chessboard({
   // Kludgy fix for initial hydration mismatch because react-chessboard
   // is not SSR-friendly.
   const [isMounted, setIsMounted] = useState(false);
+  // NEW: Audio refs for move / capture sounds
+  const moveSoundRef = useRef<HTMLAudioElement | null>(null);
+  const captureSoundRef = useRef<HTMLAudioElement | null>(null);
   useEffect(() => {
+    // Using Chess.com piece move sounds (publicly available)
+    moveSoundRef.current = new Audio("/sounds/move-self.mp3");
+    captureSoundRef.current = new Audio("/sounds/capture.mp3");
+    // notificationSoundRef.current = new Audio("/sounds/notification.mp3");
     setIsMounted(true);
   }, []);
 
@@ -34,6 +42,14 @@ export function Chessboard({
       to: string;
     }[];
     return moves.map((move) => move.to);
+  }
+
+  // Helper: Play move / capture sound without blocking subsequent plays
+  function playSound(capture: boolean) {
+    const srcRef = capture ? captureSoundRef.current : moveSoundRef.current;
+    if (!srcRef) return;
+    // cloneNode allows parallel overlapping plays
+    (srcRef.cloneNode() as HTMLAudioElement).play().catch(() => {});
   }
 
   // --- Drag-and-drop handler ---
@@ -52,6 +68,7 @@ export function Chessboard({
       });
       // If the move is legal, update the state
       if (move) {
+        playSound(!!move.captured);
         setGame(gameCopy);
         setSelectedSquare(null);
         setLegalMoves([]);
@@ -115,12 +132,14 @@ export function Chessboard({
   // --- Drag handlers ---
   function onPieceDragBegin(piece: string, sourceSquare: string) {
     if (disabled) return;
+    document.body.style.cursor = "grabbing";
     setSelectedSquare(sourceSquare);
     setLegalMoves(getLegalMoves(sourceSquare));
   }
 
   function onPieceDragEnd() {
     if (disabled) return;
+    document.body.style.cursor = "auto";
     setSelectedSquare(null);
     setLegalMoves([]);
   }
@@ -137,7 +156,7 @@ export function Chessboard({
     };
   }
 
-  if (selectedSquare) {
+  if (!disabled && selectedSquare) {
     customSquareStyles[selectedSquare] = {
       background: "#eab30888",
     };
@@ -147,6 +166,48 @@ export function Chessboard({
       };
     });
   }
+
+  // --- Custom piece rendering (scale + shadow on drag) ---
+  const customPieces = useMemo(() => {
+    const pieces: Record<
+      string,
+      (opts: { isDragging: boolean; squareWidth: number }) => React.ReactElement
+    > = {};
+    const names = [
+      "wP",
+      "wN",
+      "wB",
+      "wR",
+      "wQ",
+      "wK",
+      "bP",
+      "bN",
+      "bB",
+      "bR",
+      "bQ",
+      "bK",
+    ];
+    names.forEach((name) => {
+      pieces[name] = ({ isDragging, squareWidth }) => (
+        <Image
+          src={`/pieces/${name.toLowerCase()}.png`}
+          alt=""
+          style={{
+            width: squareWidth,
+            height: squareWidth,
+            transform: isDragging ? "scale(1.15)" : "scale(1)",
+            filter: isDragging ? "drop-shadow(0 4px 10px rgba(0,0,0,0.6))" : "none",
+            transition: "transform 0.1s ease-out, filter 0.1s ease-out",
+            pointerEvents: "none",
+          }}
+          draggable={false}
+          width={squareWidth}
+          height={squareWidth}
+        />
+      );
+    });
+    return pieces;
+  }, []);
 
   if (!isMounted) {
     return (
@@ -166,6 +227,7 @@ export function Chessboard({
         onPieceDragEnd={onPieceDragEnd}
         customSquareStyles={customSquareStyles}
         customArrows={arrows}
+        customPieces={customPieces}
         arePiecesDraggable={!disabled}
       />
     </div>
