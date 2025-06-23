@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Chess } from "chess.js";
+import { Chess, Square } from "chess.js";
 import toast from "react-hot-toast";
 import { useGameById, useCreateGame, useUpdateGame } from "@/lib/queries/game-tanstack";
 import useSupabaseBrowser from "@/lib/supabase/client";
@@ -17,7 +17,7 @@ import { MoveHistory } from "@/components/move-history";
 import { AIAnalysis } from "@/components/ai-analysis";
 import { GameControls } from "@/components/game-controls";
 
-import { getBestMove, terminateEngine } from "@/lib/engine/stockfish";
+import { getBestMove, terminateEngine, analyzePosition } from "@/lib/engine/stockfish";
 import { useReviewableGame } from "@/lib/hooks/useReviewableGame";
 import { GameResult } from "../api/games/[gameId]/route";
 import { useFlaggedMoves } from "@/lib/hooks/useFlaggedMoves";
@@ -47,6 +47,9 @@ export default function PlayPage() {
   const [clockHistory, setClockHistory] = useState<{ white: number; black: number }[]>([
     { white: 300, black: 300 },
   ]);
+  const [hintArrows, setHintArrows] = useState<[Square, Square, string][]>([]);
+  const [hintLoading, setHintLoading] = useState(false);
+  const [hintActive, setHintActive] = useState(false);
 
   // Read ?gameId= from URL
   const searchParams = useSearchParams();
@@ -397,6 +400,67 @@ export default function PlayPage() {
     return () => window.removeEventListener("keydown", handler);
   }, [stepBackward, stepForward]);
 
+  const handleHint = async () => {
+    if (hintLoading) return;
+    setHintLoading(true);
+    try {
+      const fen = game.fen();
+      // Optimistic UI update
+      setAnalysis("Generating hint…");
+
+      // Fire off Stockfish analysis and LLM call in parallel
+      const [engineRes, hintRes] = await Promise.all([
+        analyzePosition(fen, 12),
+        fetch(`/api/hint?fen=${encodeURIComponent(fen)}`).then(
+          (r) => r.json() as Promise<{ analysis: string }>
+        ),
+      ]);
+
+      // Build combined analysis string (LLM + engine details)
+      const detailsParts: string[] = [];
+      if (engineRes.bestMove) detailsParts.push(`Best: ${engineRes.bestMove}`);
+      if (engineRes.mateIn !== undefined && engineRes.mateIn !== null) {
+        detailsParts.push(`Mate in ${engineRes.mateIn}`);
+      } else if (
+        engineRes.evaluationCp !== undefined &&
+        engineRes.evaluationCp !== null
+      ) {
+        const cp = (game.turn() === "w" ? 1 : -1) * (engineRes.evaluationCp / 100);
+        detailsParts.push(`Eval: ${cp.toFixed(2)}`);
+      }
+      const analysisText = detailsParts.length
+        ? `${hintRes.analysis}\n${detailsParts.join(" | ")}`
+        : hintRes.analysis;
+
+      setAnalysis(analysisText);
+      setHintActive(true);
+
+      // Draw arrow for the suggested move (from Stockfish)
+      const match = engineRes.bestMove.match(/^([a-h][1-8])([a-h][1-8])/);
+      if (match) {
+        const from = match[1] as Square;
+        const to = match[2] as Square;
+        setHintArrows([[from, to, "rgb(0,128,0)"]]);
+        // Remove arrow after 5 seconds (visual only)
+        setTimeout(() => setHintArrows([]), 30000);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to generate hint");
+    } finally {
+      setHintLoading(false);
+    }
+  };
+
+  // Clear hint visuals & text when a new move is made (history length changes)
+  useEffect(() => {
+    if (hintActive) {
+      setHintActive(false);
+      setHintArrows([]);
+      setAnalysis("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fullSanHistory.length]);
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -412,6 +476,7 @@ export default function PlayPage() {
               setGame={updateGame}
               flipped={flippedBoard}
               disabled={gameResult !== null}
+              arrows={hintArrows}
             />
           </div>
         </div>
@@ -447,6 +512,9 @@ export default function PlayPage() {
             onNewGame={handleNewGame}
             onResign={handleResign}
             onFlipBoard={handleFlipBoard}
+            onHint={handleHint}
+            hintLoading={hintLoading}
+            disabled={gameResult !== null}
           />
 
           {/* Post-game Actions */}
