@@ -21,7 +21,7 @@ let strength = false;
 
 const OPENING_PV = 1;
 const MIDGAME_PV = 2;
-const ENDGAME_PV = 2;
+const ENDGAME_PV = 1;
 
 interface ParsedInfo {
     depth?: number;
@@ -41,15 +41,16 @@ async function setStrength(weak: boolean) {
         // Set to a limited ELO for gameplay
         ready = false;
         stockfishWorker!.postMessage("setoption name UCI_LimitStrength value true");
-        stockfishWorker!.postMessage("setoption name UCI_Elo value 600");
-        stockfishWorker!.postMessage("setoption name MultiPV value 10");
-        // stockfishWorker!.postMessage("setoption name Skill Level value 0");
+        // stockfishWorker!.postMessage("setoption name UCI_Elo value 600");
+        stockfishWorker!.postMessage("setoption name MultiPV value 3");
+        stockfishWorker!.postMessage("setoption name Skill Level value 0");
         stockfishWorker!.postMessage("isready");
         await waitUntilReady();
     } else {
         // Set to full strength for analysis
         ready = false;
         stockfishWorker!.postMessage("setoption name UCI_LimitStrength value false");
+        stockfishWorker!.postMessage("setoption name MultiPV value 1");
         stockfishWorker!.postMessage("isready");
         await waitUntilReady();
     }
@@ -172,8 +173,9 @@ export async function getBestMove(fen: string, moveNumber: number): Promise<stri
             resolve(move ?? best);
         });
 
-        // Launch search – a lower depth makes for weaker play.
-        stockfishWorker.postMessage("go depth 1");
+        // Launch search - a lower depth makes for weaker play.
+        stockfishWorker.postMessage("go depth 2");
+
     });
 }
 
@@ -213,7 +215,7 @@ export function wasmThreadsSupported() {
     try {
         window.postMessage(mem, "*");
     } catch (e) {
-        console.log(`Browser Error ${e}`);
+        console.error(`Browser Error ${e}`);
         return false;
     }
 
@@ -221,7 +223,7 @@ export function wasmThreadsSupported() {
     try {
         mem.grow(8);
     } catch (e) {
-        console.log(`Browser Error ${e}`);
+        console.error(`Browser Error ${e}`);
         return false;
     }
 
