@@ -24,6 +24,11 @@ export function Chessboard({
   // NEW: Audio refs for move / capture sounds
   const moveSoundRef = useRef<HTMLAudioElement | null>(null);
   const captureSoundRef = useRef<HTMLAudioElement | null>(null);
+
+  // Track previous game state to detect AI moves
+  const prevGameRef = useRef<string>("");
+  const userMoveRef = useRef<boolean>(false);
+
   useEffect(() => {
     // Using Chess.com piece move sounds (publicly available)
     moveSoundRef.current = new Audio("/sounds/move-self.mp3");
@@ -31,6 +36,31 @@ export function Chessboard({
     // notificationSoundRef.current = new Audio("/sounds/notification.mp3");
     setIsMounted(true);
   }, []);
+
+  // Detect AI moves and play sounds
+  useEffect(() => {
+    const currentPgn = game.pgn();
+
+    // If this is not the initial load and the game has changed
+    if (
+      prevGameRef.current &&
+      prevGameRef.current !== currentPgn &&
+      !userMoveRef.current
+    ) {
+      // This means the game changed but not from a user move (likely AI move)
+      const history = game.history({ verbose: true });
+      if (history.length > 0) {
+        const lastMove = history[history.length - 1];
+        // Play sound based on whether it was a capture
+        playSound(!!lastMove.captured);
+      }
+    }
+
+    // Update the previous game state
+    prevGameRef.current = currentPgn;
+    // Reset user move flag
+    userMoveRef.current = false;
+  }, [game]);
 
   // --- Click-to-move state ---
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
@@ -68,6 +98,8 @@ export function Chessboard({
       });
       // If the move is legal, update the state
       if (move) {
+        // Flag this as a user move
+        userMoveRef.current = true;
         playSound(!!move.captured);
         setGame(gameCopy);
         setSelectedSquare(null);
@@ -108,6 +140,8 @@ export function Chessboard({
     if (selectedSquare) {
       // If clicked square is a legal move, move there
       if (legalMoves.includes(square)) {
+        // Flag this as a user move before calling onDrop
+        userMoveRef.current = true;
         onDrop(selectedSquare, square);
         setSelectedSquare(null);
         setLegalMoves([]);
