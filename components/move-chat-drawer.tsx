@@ -1,16 +1,23 @@
 "use client";
 
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useEffect } from "react";
 import { X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useMoveChat, ChatContext } from "@/lib/hooks/useMoveChat";
+import { useChat } from "@ai-sdk/react";
 
 interface MoveChatDrawerProps {
   open: boolean;
   onClose: () => void;
   gameId: string | null;
   ply: number;
-  context?: ChatContext;
+  context?: {
+    fen_before: string;
+    move_san: string;
+    pv: string;
+    eval_cp: number | null;
+    mate_in: number | null;
+    explanation?: string;
+  };
 }
 
 export const MoveChatDrawer: React.FC<MoveChatDrawerProps> = ({
@@ -20,9 +27,12 @@ export const MoveChatDrawer: React.FC<MoveChatDrawerProps> = ({
   ply,
   context,
 }) => {
-  const { messages, send, sending } = useMoveChat(gameId, ply, context, open);
-  const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
+    api: gameId ? `/api/games/${gameId}/moves/${ply}/chat` : "/api/chat",
+    body: context ? { ...context } : undefined,
+  });
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -34,11 +44,6 @@ export const MoveChatDrawer: React.FC<MoveChatDrawerProps> = ({
     };
     if (open) window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [open]);
-
-  // Clear input when closing
-  useEffect(() => {
-    if (!open) setInput("");
   }, [open]);
 
   if (!open) return null;
@@ -70,35 +75,21 @@ export const MoveChatDrawer: React.FC<MoveChatDrawerProps> = ({
                 }
               >
                 {m.content}
-                {m.created_at && (
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    {new Date(m.created_at).toLocaleTimeString()}
-                  </span>
-                )}
               </span>
             </div>
           ))}
           <div ref={bottomRef} />
         </div>
         {/* input */}
-        <form
-          className="p-4 border-t flex gap-2"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            if (!input.trim()) return;
-            const text = input;
-            setInput("");
-            await send(text);
-          }}
-        >
+        <form className="p-4 border-t flex gap-2" onSubmit={handleSubmit}>
           <input
             className="flex-1 border rounded-md px-3 py-2 bg-background text-foreground"
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={handleInputChange}
             placeholder="Ask the coach…"
           />
-          <Button type="submit" disabled={!input.trim() || sending}>
-            {sending ? <Loader2 className="size-4 animate-spin" /> : "Send"}
+          <Button type="submit" disabled={!input.trim() || isLoading}>
+            {isLoading ? <Loader2 className="size-4 animate-spin" /> : "Send"}
           </Button>
         </form>
       </div>

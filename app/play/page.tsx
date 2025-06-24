@@ -25,7 +25,7 @@ import { useToggleFlag } from "@/lib/hooks/useToggleFlag";
 import { useTriggerAnalysis } from "@/lib/hooks/useTriggerAnalysis";
 import { MoveChatDrawer } from "@/components/move-chat-drawer";
 import { MoveChatButton } from "@/components/move-chat-button";
-import { ChatContext } from "@/lib/hooks/useMoveChat";
+import { ChatContext } from "@/lib/types";
 
 export default function PlayPage() {
   const router = useRouter();

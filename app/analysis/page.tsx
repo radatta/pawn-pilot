@@ -22,7 +22,7 @@ import { MoveChatDrawer } from "@/components/move-chat-drawer";
 import { MoveChatButton } from "@/components/move-chat-button";
 import { Chess } from "chess.js";
 import { analyzePosition } from "@/lib/engine/stockfish";
-import { ChatContext } from "@/lib/hooks/useMoveChat";
+import { ChatContext } from "@/lib/types";
 
 export default function AnalysisPage() {
   const searchParams = useSearchParams();
