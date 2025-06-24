@@ -6,20 +6,21 @@ export interface PlyAnalysis {
     eval_cp: number | null;
     mate_in: number | null;
     pv: string | null;
+    status?: 'pending' | 'engine_complete' | 'complete' | string;
 }
 
-export const gameAnalysisKey = (id: string) => ["gameAnalysis", id] as const;
+export const gameAnalysisKey = (gameId: string) => ["game-analysis", gameId] as const;
 
 export function useGameAnalysis(gameId: string | undefined) {
     return useQuery({
-        queryKey: gameAnalysisKey(gameId ?? ""),
+        queryKey: gameId ? gameAnalysisKey(gameId) : ["game-analysis"],
         queryFn: async () => {
-            if (!gameId) return null;
-            const res = await fetch(`/api/games/${gameId}/analysis`, { method: "GET" });
-            if (!res.ok) {
-                throw new Error("Failed to fetch analysis");
+            if (!gameId) return [];
+            const response = await fetch(`/api/games/${gameId}/analysis`);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch analysis: ${response.status}`);
             }
-            const json = (await res.json()) as { analysis: PlyAnalysis[] };
+            const json = await response.json();
             return json.analysis;
         },
         enabled: !!gameId,

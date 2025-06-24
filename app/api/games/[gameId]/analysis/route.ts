@@ -122,7 +122,10 @@ export const POST = withErrorHandling(async function POST(req: NextRequest, { pa
                             if (explanation && explanation.trim() !== "") {
                                 const { error: updateErr } = await supabase
                                     .from("move_analysis")
-                                    .update({ explanation })
+                                    .update({
+                                        explanation,
+                                        status: 'complete'  // Mark as fully complete when explanation is added
+                                    })
                                     .eq("game_id", gameId)
                                     .eq("move_number", i + 1);
 
@@ -201,7 +204,7 @@ export const GET = withErrorHandling(async function GET(
 
     const { data, error } = await supabase
         .from("move_analysis")
-        .select("move_number, explanation, best_move, eval_cp, mate_in, pv")
+        .select("move_number, explanation, best_move, eval_cp, mate_in, pv, status")
         .eq("game_id", gameId)
         .order("move_number");
 
@@ -216,6 +219,7 @@ export const GET = withErrorHandling(async function GET(
         eval_cp: (row as { eval_cp?: number | null }).eval_cp ?? null,
         mate_in: (row as { mate_in?: number | null }).mate_in ?? null,
         pv: (row as { pv?: string | null }).pv ?? null,
+        status: (row as { status?: string | null }).status ?? "pending",
     }));
 
     return NextResponse.json({ analysis });
@@ -238,7 +242,7 @@ export const PUT = withErrorHandling(async function PUT(
 
     const body = await req.json();
     const updates = body?.updates as
-        | { move_number: number; best_move: string; eval_cp?: number; mate_in?: number; pv?: string }[]
+        | { move_number: number; best_move: string; eval_cp?: number; mate_in?: number; pv?: string; status?: string }[]
         | undefined;
 
     if (!updates || !Array.isArray(updates) || updates.length === 0) {
@@ -253,6 +257,7 @@ export const PUT = withErrorHandling(async function PUT(
         eval_cp: u.eval_cp ?? null,
         mate_in: u.mate_in ?? null,
         pv: u.pv ?? null,
+        status: u.status ?? 'engine_complete',
     }));
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

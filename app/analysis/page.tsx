@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, Suspense, useRef, useState } from "react";
+import { useEffect, useMemo, Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { GameStatus } from "@/components/game-status";
 import { Chessboard } from "@/components/chessboard";
@@ -19,6 +19,7 @@ import { useFlaggedMoves } from "@/lib/hooks/useFlaggedMoves";
 import { useGameAnalysis, PlyAnalysis } from "@/lib/queries/game-analysis-tanstack";
 import { useBackfillEngineAnalysis } from "@/lib/hooks/useBackfillEngineAnalysis";
 import { useTriggerAnalysis } from "@/lib/hooks/useTriggerAnalysis";
+import { useAnalysisState } from "@/lib/hooks/useAnalysisState";
 
 function AnalysisPageContent() {
   const searchParams = useSearchParams();
@@ -67,16 +68,29 @@ function AnalysisPageContent() {
     isLoading: analysisLoading,
     error: analysisError,
   } = useGameAnalysis(gameId ?? undefined);
-  const triggerAnalysisMutation = useTriggerAnalysis();
 
-  // Check if analysis is complete (has both engine data and explanations)
-  const isAnalysisComplete = useMemo(() => {
-    if (!batchAnalysis || batchAnalysis.length === 0) return false;
+  // Use our new FSM for analysis state management
+  const {
+    state: analysisState,
+    isComplete,
+    llmTriggered,
+    setLlmTriggered,
+  } = useAnalysisState({
+    gameId,
+    analysis: batchAnalysis,
+    sanHistory: fullSanHistory,
+    isLoading: analysisLoading,
+    error: analysisError as Error | null,
+  });
 
-    return batchAnalysis.every(
-      (move) => move.best_move && move.explanation && move.explanation.trim() !== ""
-    );
-  }, [batchAnalysis]);
+  // Display analysis state for debugging
+  useEffect(() => {
+    console.log("Analysis state:", analysisState);
+  }, [analysisState]);
+
+  const triggerAnalysisMutation = useTriggerAnalysis((newState) => {
+    console.log(`Analysis state transition: ${analysisState} -> ${newState}`);
+  });
 
   const currentAnalysis: PlyAnalysis | null =
     currentPly >= 0 && batchAnalysis ? batchAnalysis[currentPly] ?? null : null;
@@ -84,12 +98,20 @@ function AnalysisPageContent() {
   const analysis = useMemo(() => {
     if (currentPly < 0) return "Select a move or use ← → keys to view insights.";
 
-    if (analysisLoading || !isAnalysisComplete) {
-      return "Analyzing game... This may take a moment.";
+    // Show appropriate message based on analysis state
+    switch (analysisState) {
+      case "loading-data":
+        return "Loading analysis data...";
+      case "backfilling-engine":
+        return "Running Stockfish analysis... This may take a moment.";
+      case "waiting-llm":
+        return "Generating AI insights... This may take a moment.";
+      case "error":
+        return "Error loading analysis. Please try again.";
     }
 
-    if (analysisError) {
-      return "Error loading analysis. Please try again.";
+    if (!isComplete) {
+      return "Analyzing game... This may take a moment.";
     }
 
     if (!currentAnalysis) return "No analysis available for this move.";
@@ -110,16 +132,9 @@ function AnalysisPageContent() {
     }
     if (details.length) parts.push(details.join(" | "));
     return parts.join("\n");
-  }, [
-    currentAnalysis,
-    game,
-    currentPly,
-    analysisLoading,
-    isAnalysisComplete,
-    analysisError,
-  ]);
+  }, [currentAnalysis, game, currentPly, analysisState, isComplete]);
 
-  const isThinking = analysisLoading || !isAnalysisComplete;
+  const isThinking = analysisState !== "complete" && analysisState !== "idle";
   const bestMove = currentAnalysis?.best_move ?? null;
 
   // Backfill missing engine data and trigger analysis
@@ -127,6 +142,10 @@ function AnalysisPageContent() {
     gameId,
     sanHistory: fullSanHistory,
     analysis: batchAnalysis,
+    analysisState,
+    onStateChange: (newState) => {
+      console.log(`Backfill state transition: ${analysisState} -> ${newState}`);
+    },
   });
 
   // Trigger initial analysis if game is complete but has no analysis
@@ -135,16 +154,22 @@ function AnalysisPageContent() {
       gameId &&
       batchAnalysis &&
       batchAnalysis.length === 0 &&
-      fullSanHistory.length > 0
+      fullSanHistory.length > 0 &&
+      analysisState === "backfilling-engine" &&
+      !triggerAnalysisMutation.isPending
     ) {
       console.log("Triggering initial analysis for completed game");
       triggerAnalysisMutation.mutate(gameId);
     }
-  }, [gameId, batchAnalysis, fullSanHistory.length, triggerAnalysisMutation]);
+  }, [
+    gameId,
+    batchAnalysis,
+    fullSanHistory.length,
+    triggerAnalysisMutation,
+    analysisState,
+  ]);
 
   // Trigger LLM analysis once for moves that have engine data but missing explanations
-  const llmTriggeredRef = useRef(false);
-
   useEffect(() => {
     if (!gameId || !batchAnalysis || batchAnalysis.length === 0) return;
 
@@ -154,21 +179,29 @@ function AnalysisPageContent() {
 
     if (
       needsExplanation &&
-      !llmTriggeredRef.current &&
+      analysisState === "waiting-llm" &&
+      !llmTriggered &&
       !triggerAnalysisMutation.isPending
     ) {
-      llmTriggeredRef.current = true;
+      setLlmTriggered(true);
       console.log("Triggering LLM analysis for missing explanations");
       triggerAnalysisMutation.mutate(gameId);
     }
-  }, [gameId, batchAnalysis, triggerAnalysisMutation]);
+  }, [
+    gameId,
+    batchAnalysis,
+    triggerAnalysisMutation,
+    analysisState,
+    llmTriggered,
+    setLlmTriggered,
+  ]);
 
   // Reset trigger flag once analysis is complete
   useEffect(() => {
-    if (isAnalysisComplete) {
-      llmTriggeredRef.current = false;
+    if (isComplete) {
+      setLlmTriggered(false);
     }
-  }, [isAnalysisComplete]);
+  }, [isComplete, setLlmTriggered]);
 
   // Load game data
   const { data: fetchedGame, isLoading: gameLoading } = useGameById(
