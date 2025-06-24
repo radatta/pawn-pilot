@@ -26,9 +26,9 @@ export default function SignUpSuccessPage() {
 
             <p className="text-sm text-muted-foreground">
               Didn&apos;t receive the email?{" "}
-              <button className="text-primary hover:text-primary/80 transition-colors">
+              <Button variant="link" size="sm" className="h-auto p-0">
                 Resend confirmation
-              </button>
+              </Button>
             </p>
           </div>
         </CardContent>

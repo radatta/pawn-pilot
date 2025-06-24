@@ -1,6 +1,7 @@
 "use client";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
 import { Star } from "lucide-react";
 import { MoveChatButton } from "@/components/move-chat-button";
 
@@ -51,19 +52,21 @@ export function MoveHistory({
                   <span className="text-muted-foreground w-6">{move.moveNumber}.</span>
 
                   <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      className={`font-mono ${
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className={`font-mono p-0 h-auto ${
                         whiteActive ? "text-primary" : "text-foreground"
                       }`}
                       onClick={() => onSelect?.(whiteIdx)}
                       disabled={!onSelect}
                     >
                       {move.white}
-                    </button>
-                    <button
-                      type="button"
-                      className={`p-0.5 ${
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={`h-6 w-6 ${
                         move.whiteFlagged ? "text-yellow-500" : "text-muted-foreground"
                       }`}
                       onClick={() => onToggleFlag?.(whiteIdx, !!move.whiteFlagged)}
@@ -74,24 +77,26 @@ export function MoveHistory({
                         strokeWidth={1.5}
                         fill={move.whiteFlagged ? "currentColor" : "none"}
                       />
-                    </button>
+                    </Button>
                   </div>
 
                   {move.black && (
                     <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        className={`font-mono ${
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className={`font-mono p-0 h-auto ${
                           blackActive ? "text-primary" : "text-foreground"
                         }`}
                         onClick={() => onSelect?.(blackIdx)}
                         disabled={!onSelect}
                       >
                         {move.black}
-                      </button>
-                      <button
-                        type="button"
-                        className={`p-0.5 ${
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={`h-6 w-6 ${
                           move.blackFlagged ? "text-yellow-500" : "text-muted-foreground"
                         }`}
                         onClick={() => onToggleFlag?.(blackIdx, !!move.blackFlagged)}
@@ -102,7 +107,7 @@ export function MoveHistory({
                           strokeWidth={1.5}
                           fill={move.blackFlagged ? "currentColor" : "none"}
                         />
-                      </button>
+                      </Button>
                     </div>
                   )}
 

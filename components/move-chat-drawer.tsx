@@ -1,8 +1,16 @@
 "use client";
 
 import React, { useRef, useEffect } from "react";
-import { X, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { useChat } from "@ai-sdk/react";
 
 interface MoveChatDrawerProps {
@@ -38,30 +46,16 @@ export const MoveChatDrawer: React.FC<MoveChatDrawerProps> = ({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, open]);
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    if (open) window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [open]);
-
-  if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex">
-      {/* backdrop */}
-      <div className="flex-1 bg-black/40" onClick={onClose} />
-      {/* drawer */}
-      <div className="w-full max-w-md bg-card shadow-xl flex flex-col">
-        <div className="p-4 border-b flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Move {ply} Chat</h2>
-          <Button variant="ghost" size="icon" onClick={onClose}>
-            <X className="w-4 h-4" />
-          </Button>
-        </div>
+    <Sheet open={open} onOpenChange={onClose}>
+      <SheetContent side="right" className="w-full max-w-md flex flex-col">
+        <SheetHeader>
+          <SheetTitle>Move {ply} Chat</SheetTitle>
+          <SheetDescription>Ask the coach about this move</SheetDescription>
+        </SheetHeader>
+
         {/* messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 text-sm">
+        <div className="flex-1 overflow-y-auto space-y-3 text-sm">
           {messages.map((m, idx) => (
             <div
               key={m.id ?? idx}
@@ -80,19 +74,20 @@ export const MoveChatDrawer: React.FC<MoveChatDrawerProps> = ({
           ))}
           <div ref={bottomRef} />
         </div>
+
         {/* input */}
-        <form className="p-4 border-t flex gap-2" onSubmit={handleSubmit}>
-          <input
-            className="flex-1 border rounded-md px-3 py-2 bg-background text-foreground"
+        <form className="border-t pt-4 flex gap-2" onSubmit={handleSubmit}>
+          <Input
+            className="flex-1"
             value={input}
             onChange={handleInputChange}
             placeholder="Ask the coach…"
           />
           <Button type="submit" disabled={!input.trim() || isLoading}>
-            {isLoading ? <Loader2 className="size-4 animate-spin" /> : "Send"}
+            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send"}
           </Button>
         </form>
-      </div>
-    </div>
+      </SheetContent>
+    </Sheet>
   );
 };
