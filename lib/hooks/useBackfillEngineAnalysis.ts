@@ -8,21 +8,29 @@ interface UseBackfillEngineOptions {
     gameId: string | null;
     sanHistory: string[];
     analysis: PlyAnalysis[] | undefined | null;
+    onAnalysisComplete?: () => void;
 }
 
 // Runs client-side Stockfish to fill in missing best_move/eval_cp/mate_in
-export function useBackfillEngineAnalysis({ gameId, sanHistory, analysis }: UseBackfillEngineOptions) {
+export function useBackfillEngineAnalysis({ gameId, sanHistory, analysis, onAnalysisComplete }: UseBackfillEngineOptions) {
     const queryClient = useQueryClient();
 
 
     const uploadMutation = useMutation({
         mutationFn: async (updates: { move_number: number; best_move: string; eval_cp?: number; mate_in?: number }[]) => {
             if (!gameId) return;
-            await fetch(`/api/games/${gameId}/analysis`, {
+            const response = await fetch(`/api/games/${gameId}/analysis`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ updates }),
             });
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response;
+        },
+        onSuccess: () => {
+            onAnalysisComplete?.();
         },
     });
     const uploadMutationRef = useRef(uploadMutation);
@@ -77,6 +85,7 @@ export function useBackfillEngineAnalysis({ gameId, sanHistory, analysis }: UseB
                 }
             }
 
+            console.log("useBackfillEngineAnalysis - updates", cancelled, updates.length);
             if (!cancelled && updates.length) {
                 uploadMutationRef.current.mutate(updates);
             }
@@ -86,5 +95,5 @@ export function useBackfillEngineAnalysis({ gameId, sanHistory, analysis }: UseB
             cancelled = true;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [gameId, sanHistory.length, analysis]);
+    }, [gameId, sanHistory.length]);
 } 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { GameStatus } from "@/components/game-status";
 import { Chessboard } from "@/components/chessboard";
 import { MoveHistory } from "@/components/move-history";
@@ -26,6 +26,7 @@ import { ChatContext } from "@/lib/types";
 
 export default function AnalysisPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const gameId = searchParams.get("gameId");
   const supabase = useSupabaseBrowser();
 
@@ -92,6 +93,17 @@ export default function AnalysisPage() {
     gameId,
     sanHistory: fullSanHistory,
     analysis: batchAnalysis,
+    onAnalysisComplete: () => {
+      console.log("onAnalysisComplete", pgnParam, gameId);
+      if (pgnParam && gameId) {
+        // Remove PGN from search params since analysis is now complete and stored on server
+        const newSearchParams = new URLSearchParams(searchParams.toString());
+        newSearchParams.delete("pgn");
+        const newUrl = `${window.location.pathname}?${newSearchParams.toString()}`;
+        router.replace(newUrl);
+        console.log("newUrl", newUrl);
+      }
+    },
   });
 
   // Update displayed time when currentPly changes
