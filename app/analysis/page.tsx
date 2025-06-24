@@ -128,14 +128,27 @@ export default function AnalysisPage() {
     if (!fetchedGame) return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const g: any = fetchedGame;
-    if (g.pgn) loadPGN(g.pgn);
+
+    // If we have a PGN parameter, only load from server if it's different or if we don't have any PGN loaded yet
+    if (pgnParam) {
+      // Check if the server PGN is different from what we have in the query parameter
+      if (g.pgn && g.pgn !== pgnParam && g.pgn !== game.pgn()) {
+        // Server has newer/different PGN, load it
+        loadPGN(g.pgn);
+      }
+      // If PGNs match or server has no PGN, keep using the query parameter PGN
+    } else {
+      // No PGN parameter, load from server if available
+      if (g.pgn) loadPGN(g.pgn);
+    }
+
     clock.load({
       white: g.white_time_remaining || 300,
       black: g.black_time_remaining || 300,
       clock_history: g.clock_history || undefined,
       last_move_timestamp: g.last_move_timestamp || undefined,
     });
-  }, [fetchedGame]);
+  }, [fetchedGame, loadPGN, pgnParam]);
 
   // Cleanup on unmount
   useEffect(() => {

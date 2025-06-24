@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { gameAnalysisKey } from "@/lib/queries/game-analysis-tanstack";
+import { gameAnalysisKey, PlyAnalysis } from "@/lib/queries/game-analysis-tanstack";
 
 /**
  * useTriggerAnalysis
@@ -20,9 +20,16 @@ export function useTriggerAnalysis() {
             return (await res.json()) as { analysis: string[] };
         },
         onSuccess: (data, gameId) => {
+            // Transform the POST response (string[]) to match the GET response format (PlyAnalysis[])
+            const transformedAnalysis: PlyAnalysis[] = data.analysis.map((explanation) => ({
+                explanation,
+                best_move: null,
+                eval_cp: null,
+                mate_in: null,
+            }));
+
             // Cache the analysis so other components can access it immediately.
-            queryClient.setQueryData(gameAnalysisKey(gameId), data.analysis);
-            // Also return the analysis for any local subscribers
+            queryClient.setQueryData(gameAnalysisKey(gameId), transformedAnalysis);
         },
     });
 } 

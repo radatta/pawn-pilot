@@ -30,6 +30,11 @@ export function useBackfillEngineAnalysis({ gameId, sanHistory, analysis }: UseB
 
     const startedRef = useRef(false);
 
+    // Reset started flag when analysis data changes
+    useEffect(() => {
+        startedRef.current = false;
+    }, [analysis]);
+
     useEffect(() => {
         if (!gameId || !analysis || sanHistory.length === 0 || startedRef.current) return;
 
@@ -59,7 +64,6 @@ export function useBackfillEngineAnalysis({ gameId, sanHistory, analysis }: UseB
                         mate_in: res.mateIn,
                     });
 
-
                     // optimistic cache update
                     queryClient.setQueryData(gameAnalysisKey(gameId), (old: PlyAnalysis[] | undefined) => {
                         if (!old) return old;
@@ -82,5 +86,5 @@ export function useBackfillEngineAnalysis({ gameId, sanHistory, analysis }: UseB
             cancelled = true;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [gameId, sanHistory.length, queryClient]);
+    }, [gameId, sanHistory.length, analysis]);
 } 
