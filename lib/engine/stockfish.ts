@@ -188,6 +188,9 @@ export function terminateEngine() {
     pendingMoveResolvers.length = 0;
 }
 
+// Export initEngine so it can be preloaded
+export { initEngine };
+
 // Renamed to conform to TS/JS naming conventions (fix #9)
 export type StockfishState = "Loading" | "Ready" | "Waiting" | "Failed";
 

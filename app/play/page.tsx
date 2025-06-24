@@ -17,7 +17,12 @@ import { MoveHistory } from "@/components/move-history";
 import { AIAnalysis } from "@/components/ai-analysis";
 import { GameControls } from "@/components/game-controls";
 
-import { getBestMove, terminateEngine, analyzePosition } from "@/lib/engine/stockfish";
+import {
+  getBestMove,
+  terminateEngine,
+  analyzePosition,
+  initEngine,
+} from "@/lib/engine/stockfish";
 import { useReviewableGame } from "@/lib/hooks/useReviewableGame";
 import { GameResult } from "../api/games/[gameId]/route";
 import { useFlaggedMoves } from "@/lib/hooks/useFlaggedMoves";
@@ -466,6 +471,27 @@ export default function PlayPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fullSanHistory.length]);
+
+  // Preload Stockfish engine on page load (non-blocking)
+  useEffect(() => {
+    const preloadEngine = async () => {
+      try {
+        await initEngine();
+      } catch (error) {
+        console.warn("Failed to preload Stockfish engine:", error);
+        // Don't show error to user as this is just a performance optimization
+      }
+    };
+
+    preloadEngine();
+  }, []);
+
+  // Cleanup Stockfish engine on unmount
+  useEffect(() => {
+    return () => {
+      terminateEngine();
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">
