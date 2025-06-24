@@ -4,9 +4,9 @@ import { withErrorHandling } from "@/lib/utils/api-error-wrapper";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { Chess } from "chess.js";
 import { openai } from "@ai-sdk/openai";
-import { generateText } from "ai";
+import { generateText, } from "ai";
 import { analysisPrompt } from "@/lib/prompts";
-import type { Database } from "@/lib/database.types";
+
 
 // Helper: convert SAN moves array to a single PGN-like string "1. e4 e5 2. ..."
 function movesArrayToString(moves: string[]): string {
@@ -20,7 +20,7 @@ function movesArrayToString(moves: string[]): string {
     return parts.join(" ");
 }
 
-export const POST = withErrorHandling(async function POST(req: NextRequest, { params }: { params: { gameId: string } }) {
+export const POST = withErrorHandling(async function POST(req: NextRequest, { params }: { params: Promise<{ gameId: string }> }) {
     const { gameId } = await params;
     if (!gameId) {
         return NextResponse.json({ error: "Missing gameId in URL" }, { status: 400 });
@@ -57,9 +57,10 @@ export const POST = withErrorHandling(async function POST(req: NextRequest, { pa
 
     // ------------------------------------------------------------------
     // Walk through the game, capturing FEN & move history after every ply
+    // AND fetch any existing engine analysis data
     // ------------------------------------------------------------------
     const moves = [] as string[];
-    const positions: { fen: string; history: string }[] = [];
+    const positions: { fen: string; history: string; moveNumber: number }[] = [];
 
     const loader = new Chess();
     try {
@@ -76,8 +77,24 @@ export const POST = withErrorHandling(async function POST(req: NextRequest, { pa
         const moveSan = allMoves[i];
         simulator.move(moveSan);
         moves.push(moveSan);
-        positions.push({ fen: simulator.fen(), history: movesArrayToString([...moves]) });
+        positions.push({
+            fen: simulator.fen(),
+            history: movesArrayToString([...moves]),
+            moveNumber: i + 1
+        });
     }
+
+    // Fetch existing engine analysis data
+    const { data: existingAnalysis } = await supabase
+        .from("move_analysis")
+        .select("move_number, best_move, eval_cp, mate_in, pv, explanation")
+        .eq("game_id", gameId)
+        .order("move_number");
+
+    // Create a map of existing analysis by move number
+    const analysisMap = new Map(
+        (existingAnalysis ?? []).map(row => [row.move_number, row])
+    );
 
     // ------------------------------------------------------------------
     // Analyse each position in batches of `concurrency` using OpenAI
@@ -99,20 +116,20 @@ export const POST = withErrorHandling(async function POST(req: NextRequest, { pa
                 // ------------------------------------------------------------------
                 (async () => {
                     try {
-                        // Upsert explanations into move_analysis
-                        type Row = Database["public"]["Tables"]["move_analysis"]["Insert"];
-                        const rows: Row[] = results.map((explanation, idx) => ({
-                            game_id: gameId,
-                            move_number: idx + 1,
-                            explanation,
-                        }));
+                        // Update only explanations, preserving existing engine data
+                        for (let i = 0; i < results.length; i++) {
+                            const explanation = results[i];
+                            if (explanation && explanation.trim() !== "") {
+                                const { error: updateErr } = await supabase
+                                    .from("move_analysis")
+                                    .update({ explanation })
+                                    .eq("game_id", gameId)
+                                    .eq("move_number", i + 1);
 
-                        const { error: upErr } = await supabase
-                            .from("move_analysis")
-                            .upsert(rows, { onConflict: "game_id,move_number" });
-
-                        if (upErr) {
-                            console.error("[ANALYZE] move_analysis upsert error", upErr);
+                                if (updateErr) {
+                                    console.error(`[ANALYZE] update explanation error for move ${i + 1}:`, updateErr);
+                                }
+                            }
                         }
                         console.debug("[ANALYZE] Explanations persisted");
                     } catch (e) {
@@ -124,16 +141,35 @@ export const POST = withErrorHandling(async function POST(req: NextRequest, { pa
             }
             while (active < concurrency && currentIdx < positions.length) {
                 const idx = currentIdx++;
-                const { fen, history } = positions[idx];
+                const { fen, history, moveNumber } = positions[idx];
+                const engineData = analysisMap.get(moveNumber);
+
+                // Skip moves without pv data OR that already have explanations
+                if (!engineData?.pv || (engineData.explanation && engineData.explanation.trim() !== "")) {
+                    const reason = !engineData?.pv ? "no pv data" : "already has explanation";
+                    console.debug(`[ANALYZE] Skipping ply ${idx} (move ${moveNumber}) - ${reason}`);
+                    results[idx] = engineData?.explanation || ""; // Keep existing explanation or empty
+                    maybeLaunch(); // Continue to next move
+                    return;
+                }
+
                 active++;
-                console.debug(`[ANALYZE] Requesting analysis for ply ${idx}`);
-                generateText({ model: openai(process.env.OPENAI_MODEL ?? "gpt-4o"), prompt: analysisPrompt({ fen, gameHistory: history, pv: "" }) })
+                console.debug(`[ANALYZE] Requesting analysis for ply ${idx} (move ${moveNumber}) with pv data`);
+
+                // Include engine data in prompt (guaranteed to have pv now)
+                const pv = engineData.pv;
+
+                generateText({
+                    model: openai(process.env.OPENAI_MODEL ?? "gpt-4o"),
+                    prompt: analysisPrompt({ fen, gameHistory: history, pv })
+                })
                     .then((res) => {
-                        // res.text according to typings
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        const text = (res as any).text as string | undefined;
+                        // if (!res.text) {
+                        //     throw new Error("No text in response");
+                        // }
+                        const text = res.text;
                         results[idx] = text ?? "Unable to generate analysis.";
-                        console.debug(`[ANALYZE] Completed ply ${idx}`);
+                        console.debug(`[ANALYZE] Completed ply ${idx} with engine data`);
                     })
                     .catch((err) => {
                         console.error("Analysis error", err);
@@ -154,7 +190,7 @@ export const POST = withErrorHandling(async function POST(req: NextRequest, { pa
 // ------------------------------------------------------------------
 export const GET = withErrorHandling(async function GET(
     _req: NextRequest,
-    { params }: { params: { gameId: string } }
+    { params }: { params: Promise<{ gameId: string }> }
 ) {
     const { gameId } = await params;
     if (!gameId) {
@@ -191,7 +227,7 @@ export const GET = withErrorHandling(async function GET(
 // ------------------------------------------------------------------
 export const PUT = withErrorHandling(async function PUT(
     req: NextRequest,
-    { params }: { params: { gameId: string } }
+    { params }: { params: Promise<{ gameId: string }> }
 ) {
     const { gameId } = await params;
     if (!gameId) {

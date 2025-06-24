@@ -6,8 +6,13 @@ import { getGameById } from '@/lib/queries/get-game-by-id'
 
 export const gameKey = (id: string) => ['game', id] as const
 
+// Always refetch on mount to ensure latest PGN and other fields
 export const useGameById = (client: TypedSupabaseClient, id?: string) =>
-    useQuery(getGameById(client, id ?? ''), { enabled: !!id })
+    useQuery(getGameById(client, id ?? ''), {
+        enabled: !!id,
+        staleTime: 0,
+        refetchOnMount: 'always',
+    })
 
 export const useCreateGame = () =>
     useMutation(async (body: { timeControl: number; increment: number }) => {

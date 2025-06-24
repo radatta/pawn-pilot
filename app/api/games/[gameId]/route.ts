@@ -3,6 +3,7 @@ import { withErrorHandling } from "@/lib/utils/api-error-wrapper";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { Chess } from "chess.js";
+import { NextRequest } from "next/server";
 
 const GameStatusSchema = z.enum(["in_progress", "completed"]);
 
@@ -31,9 +32,14 @@ const BodySchema = z.object({
 });
 
 export const GET = withErrorHandling(async function GET(
-    req: Request,
-    { params }: { params: { gameId: string } }
+    _req: NextRequest,
+    { params }: { params: Promise<{ gameId: string }> }
 ) {
+    const { gameId } = await params;
+    if (!gameId) {
+        return NextResponse.json({ error: "Missing gameId" }, { status: 400 });
+    }
+
     const supabase = await createSupabaseServer();
     const {
         data: { user },
@@ -46,11 +52,16 @@ export const GET = withErrorHandling(async function GET(
     const { data, error } = await supabase
         .from("games")
         .select("*")
-        .eq("id", (await params).gameId)
+        .eq("id", gameId)
         .eq("user_id", user.id)
         .single();
 
-    if (error || !data) {
+    if (error) {
+        console.error("[GAME] Error fetching game:", error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    if (!data) {
         return NextResponse.json({ error: "Game not found" }, { status: 404 });
     }
 
@@ -58,9 +69,14 @@ export const GET = withErrorHandling(async function GET(
 });
 
 export const PUT = withErrorHandling(async function PUT(
-    req: Request,
-    { params }: { params: { gameId: string } }
+    req: NextRequest,
+    { params }: { params: Promise<{ gameId: string }> }
 ) {
+    const { gameId } = await params;
+    if (!gameId) {
+        return NextResponse.json({ error: "Missing gameId" }, { status: 400 });
+    }
+
     const supabase = await createSupabaseServer();
     const {
         data: { user },
@@ -110,7 +126,7 @@ export const PUT = withErrorHandling(async function PUT(
     const { data, error } = await supabase
         .from("games")
         .update(updateData)
-        .eq("id", (await params).gameId)
+        .eq("id", gameId)
         .select()
         .single();
 
@@ -128,7 +144,7 @@ export const PUT = withErrorHandling(async function PUT(
             const { count: existingCount, error: countError } = await supabase
                 .from("move_history")
                 .select("id", { count: "exact", head: true })
-                .eq("game_id", (await params).gameId);
+                .eq("game_id", gameId);
 
             if (countError) {
                 console.error("move_history count error", countError);
@@ -172,7 +188,7 @@ export const PUT = withErrorHandling(async function PUT(
                 const fen_after = chessReplay.fen();
 
                 rowsToInsert.push({
-                    game_id: (await params).gameId,
+                    game_id: gameId,
                     move_number: i + 1, // 1-based
                     move: move.san,
                     fen_before,

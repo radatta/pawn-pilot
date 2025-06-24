@@ -12,6 +12,7 @@ interface UseBackfillEngineOptions {
 }
 
 // Runs client-side Stockfish to fill in missing best_move/eval_cp/mate_in/pv data
+// Then triggers LLM analysis for moves with engine data but empty explanations
 export function useBackfillEngineAnalysis({ gameId, sanHistory, analysis, onAnalysisComplete }: UseBackfillEngineOptions) {
     const queryClient = useQueryClient();
 
@@ -28,16 +29,25 @@ export function useBackfillEngineAnalysis({ gameId, sanHistory, analysis, onAnal
             }
             return response;
         },
-        onSuccess: () => {
-            onAnalysisComplete?.();
+        onSuccess: async () => {
+            if (gameId) {
+                try {
+                    console.log("Engine data stored, triggering LLM analysis");
+                    const response = await fetch(`/api/games/${gameId}/analysis`, { method: "POST" });
+                    if (response.ok) {
+                        queryClient.invalidateQueries({ queryKey: gameAnalysisKey(gameId) });
+                        console.log("LLM analysis completed");
+                        onAnalysisComplete?.();
+                    }
+                } catch (err) {
+                    console.error("Failed to trigger LLM analysis:", err);
+                }
+            }
         },
     });
-    const uploadMutationRef = useRef(uploadMutation);
-    uploadMutationRef.current = uploadMutation;
 
     const startedRef = useRef(false);
 
-    // Reset started flag when analysis data changes
     useEffect(() => {
         startedRef.current = false;
     }, [analysis]);
@@ -45,12 +55,13 @@ export function useBackfillEngineAnalysis({ gameId, sanHistory, analysis, onAnal
     useEffect(() => {
         if (!gameId || !analysis || sanHistory.length === 0 || startedRef.current) return;
 
-        const snapshot = analysis;
-        const missing = snapshot
+        const missingEngineData = analysis
             .map((row, i) => (!row.best_move ? i : -1))
             .filter((i) => i !== -1);
-        if (missing.length === 0) return;
 
+        if (missingEngineData.length === 0) return;
+
+        console.log(`Backfilling engine data for ${missingEngineData.length} moves`);
         startedRef.current = true;
         let cancelled = false;
 
@@ -61,10 +72,10 @@ export function useBackfillEngineAnalysis({ gameId, sanHistory, analysis, onAnal
             for (let i = 0; i < sanHistory.length && !cancelled; i++) {
                 const san = sanHistory[i];
                 chess.move(san);
-                if (!missing.includes(i)) continue;
+                if (!missingEngineData.includes(i)) continue;
 
                 try {
-                    const res = await analyzePosition(chess.fen(), 18); // Use full depth for backfill
+                    const res = await analyzePosition(chess.fen(), 18);
                     updates.push({
                         move_number: i + 1,
                         best_move: res.bestMove,
@@ -73,7 +84,7 @@ export function useBackfillEngineAnalysis({ gameId, sanHistory, analysis, onAnal
                         pv: res.pv,
                     });
 
-                    // Optimistic cache update
+                    // Update cache optimistically
                     queryClient.setQueryData(gameAnalysisKey(gameId), (old: PlyAnalysis[] | undefined) => {
                         if (!old) return old;
                         const copy = [...old];
@@ -88,18 +99,17 @@ export function useBackfillEngineAnalysis({ gameId, sanHistory, analysis, onAnal
                         return copy;
                     });
                 } catch (err) {
-                    console.error(`Stockfish backfill error for move ${i + 1}:`, err);
+                    console.error(`Stockfish error for move ${i + 1}:`, err);
                 }
             }
 
             if (!cancelled && updates.length) {
-                uploadMutationRef.current.mutate(updates);
+                uploadMutation.mutate(updates);
             }
         })();
 
         return () => {
             cancelled = true;
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [gameId, sanHistory.length]);
 } 

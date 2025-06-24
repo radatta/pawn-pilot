@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Chess, Square } from "chess.js";
@@ -32,7 +32,7 @@ import { MoveChatDrawer } from "@/components/move-chat-drawer";
 import { MoveChatButton } from "@/components/move-chat-button";
 import { ChatContext } from "@/lib/types";
 
-export default function PlayPage() {
+function PlayPageContent() {
   const router = useRouter();
   const supabase = useSupabaseBrowser();
   const {
@@ -292,6 +292,52 @@ export default function PlayPage() {
         clock_history: newClockHistory,
       });
     }
+
+    // Store analysis for the move that was just made (after game state is handled)
+    const currentMoveCount = game.history().length;
+    const newMoveCount = newGame.history().length;
+
+    if (gameId && newMoveCount > currentMoveCount) {
+      // A new move was made - store analysis for it
+      const moveNumber = newMoveCount;
+
+      // Get the position before the move was made
+      const gameCopy = new Chess();
+      gameCopy.loadPgn(newGame.pgn());
+      // Undo the last move to get position before
+      const lastMove = gameCopy.undo();
+      const positionBeforeMove = gameCopy.fen();
+
+      if (lastMove) {
+        // Run analysis in background for the position before the move
+        analyzePosition(positionBeforeMove, 18)
+          .then(async (analysis) => {
+            try {
+              await fetch(`/api/games/${gameId}/analysis`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  updates: [
+                    {
+                      move_number: moveNumber,
+                      best_move: analysis.bestMove,
+                      eval_cp: analysis.evaluationCp ?? null,
+                      mate_in: analysis.mateIn ?? null,
+                      pv: analysis.pv ?? null,
+                    },
+                  ],
+                }),
+              });
+              console.log(`Stored analysis for move ${moveNumber}`);
+            } catch (err) {
+              console.error("Failed to store analysis data:", err);
+            }
+          })
+          .catch((err) => {
+            console.error("Background analysis failed:", err);
+          });
+      }
+    }
   };
 
   // Only allow the engine to move when we are on the latest ply (i.e., not navigating history)
@@ -321,39 +367,10 @@ export default function PlayPage() {
           const from = uci.slice(0, 2);
           const to = uci.slice(2, 4);
           const promotion = uci.length === 5 ? uci[4] : undefined;
-          const positionBeforeMove = gameCopy.fen(); // Store position for analysis
           gameCopy.move({ from, to, promotion });
 
           // Update game immediately for responsive UI
-          Bye.updateGame(gameCopy);
-
-          // Run analysis in background (don't await)
-          const currentMoveNumber = gameCopy.history().length;
-          analyzePosition(positionBeforeMove, 18)
-            .then(async (analysis) => {
-              try {
-                await fetch(`/api/games/${gameId}/analysis`, {
-                  method: "PUT",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    updates: [
-                      {
-                        move_number: currentMoveNumber,
-                        best_move: analysis.bestMove,
-                        eval_cp: analysis.evaluationCp ?? null,
-                        mate_in: analysis.mateIn ?? null,
-                        pv: analysis.pv ?? null,
-                      },
-                    ],
-                  }),
-                });
-              } catch (err) {
-                console.error("Failed to store analysis data:", err);
-              }
-            })
-            .catch((err) => {
-              console.error("Background analysis failed:", err);
-            });
+          updateGame(gameCopy);
         } catch (err) {
           toast.error(err instanceof Error ? err.message : "An error occurred");
           if (err instanceof Error && err.message === "WASM not supported") {
@@ -623,11 +640,7 @@ export default function PlayPage() {
           {/* Post-game Actions */}
           {gameResult && gameId && (
             <Button asChild size="sm" className="w-full">
-              <Link
-                href={`/analysis?gameId=${gameId}&pgn=${encodeURIComponent(game.pgn())}`}
-              >
-                Go to Analysis
-              </Link>
+              <Link href={`/analysis?gameId=${gameId}`}>Go to Analysis</Link>
             </Button>
           )}
 
@@ -642,5 +655,13 @@ export default function PlayPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function PlayPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <PlayPageContent />
+    </Suspense>
   );
 }

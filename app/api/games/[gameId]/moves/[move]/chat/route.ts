@@ -9,11 +9,7 @@ import { openai } from "@ai-sdk/openai";
 
 export const GET = withErrorHandling(async function GET(
     _req: NextRequest,
-    {
-        params,
-    }: {
-        params: { gameId: string; move: string };
-    },
+    { params }: { params: Promise<{ gameId: string; move: string }> }
 ) {
     const { gameId, move } = await params;
 
@@ -41,7 +37,7 @@ export const GET = withErrorHandling(async function GET(
 
 export const POST = withErrorHandling(async function POST(
     req: NextRequest,
-    { params }: { params: { gameId: string; move: string } },
+    { params }: { params: Promise<{ gameId: string; move: string }> },
 ) {
     const { gameId, move } = await params;
     const moveNumber = parseInt(move, 10);

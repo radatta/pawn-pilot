@@ -39,11 +39,11 @@ Suggest the strongest continuation for the side to move and briefly explain why 
 export function analysisPrompt({
     fen,
     gameHistory,
-    pv = "",
+    pv
 }: {
     fen: string;
     gameHistory: string;
-    pv?: string;
+    pv: string;
 }): string {
     return `You are a grandmaster-level chess coach giving advice to the WHITE player.
 
