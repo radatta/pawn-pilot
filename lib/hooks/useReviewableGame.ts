@@ -114,7 +114,6 @@ export function useReviewableGame(options: UseReviewableGameOptions = {}): Revie
 
     // Static full SAN list – never shrinks while navigating.
     const fullSanHistory = useMemo(() => {
-        console.log("fullSanHistory", [...game.history(), ...futureMoves.map((m) => m.san)]);
         return [...game.history(), ...futureMoves.map((m) => m.san)];
     }, [game, futureMoves]);
 

@@ -29,10 +29,6 @@ function AnalysisPageContent() {
   const { game, updateGameExternal, goToPly, fullSanHistory, currentPly, loadPGN } =
     useReviewableGame();
 
-  useEffect(() => {
-    console.log("fullSanHistory", fullSanHistory);
-  }, [fullSanHistory]);
-
   const clock = useChessClock({ start: 300, increment: 0 });
 
   // Flagged moves
@@ -83,14 +79,7 @@ function AnalysisPageContent() {
     error: analysisError as Error | null,
   });
 
-  // Display analysis state for debugging
-  useEffect(() => {
-    console.log("Analysis state:", analysisState);
-  }, [analysisState]);
-
-  const triggerAnalysisMutation = useTriggerAnalysis((newState) => {
-    console.log(`Analysis state transition: ${analysisState} -> ${newState}`);
-  });
+  const triggerAnalysisMutation = useTriggerAnalysis();
 
   const currentAnalysis: PlyAnalysis | null =
     currentPly >= 0 && batchAnalysis ? batchAnalysis[currentPly] ?? null : null;
@@ -143,9 +132,6 @@ function AnalysisPageContent() {
     sanHistory: fullSanHistory,
     analysis: batchAnalysis,
     analysisState,
-    onStateChange: (newState) => {
-      console.log(`Backfill state transition: ${analysisState} -> ${newState}`);
-    },
   });
 
   // Trigger initial analysis if game is complete but has no analysis
@@ -158,7 +144,6 @@ function AnalysisPageContent() {
       analysisState === "backfilling-engine" &&
       !triggerAnalysisMutation.isPending
     ) {
-      console.log("Triggering initial analysis for completed game");
       triggerAnalysisMutation.mutate(gameId);
     }
   }, [
@@ -174,7 +159,7 @@ function AnalysisPageContent() {
     if (!gameId || !batchAnalysis || batchAnalysis.length === 0) return;
 
     const needsExplanation = batchAnalysis.some(
-      (row) => row.pv && (!row.explanation || row.explanation.trim() === "")
+      (row: PlyAnalysis) => row.pv && (!row.explanation || row.explanation.trim() === "")
     );
 
     if (
@@ -184,7 +169,6 @@ function AnalysisPageContent() {
       !triggerAnalysisMutation.isPending
     ) {
       setLlmTriggered(true);
-      console.log("Triggering LLM analysis for missing explanations");
       triggerAnalysisMutation.mutate(gameId);
     }
   }, [

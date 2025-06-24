@@ -10,7 +10,6 @@ interface UseBackfillEngineOptions {
     sanHistory: string[];
     analysis: PlyAnalysis[] | undefined | null;
     analysisState: AnalysisState;
-    onStateChange?: (newState: AnalysisState) => void;
 }
 
 // Runs client-side Stockfish to fill in missing best_move/eval_cp/mate_in/pv data
@@ -20,7 +19,6 @@ export function useBackfillEngineAnalysis({
     sanHistory,
     analysis,
     analysisState,
-    onStateChange
 }: UseBackfillEngineOptions) {
     const queryClient = useQueryClient();
     const abortControllerRef = useRef<AbortController | null>(null);
@@ -41,22 +39,15 @@ export function useBackfillEngineAnalysis({
         onSuccess: async () => {
             if (gameId) {
                 try {
-                    console.log("Engine data stored, triggering LLM analysis");
-                    onStateChange?.('waiting-llm');
                     const response = await fetch(`/api/games/${gameId}/analysis`, { method: "POST" });
                     if (response.ok) {
                         queryClient.invalidateQueries({ queryKey: gameAnalysisKey(gameId) });
-                        console.log("LLM analysis completed");
                     }
                 } catch (err) {
                     console.error("Failed to trigger LLM analysis:", err);
-                    onStateChange?.('error');
                 }
             }
         },
-        onError: () => {
-            onStateChange?.('error');
-        }
     });
 
     const startedRef = useRef(false);
@@ -78,11 +69,9 @@ export function useBackfillEngineAnalysis({
         if (missingEngineData.length === 0) {
             // If no missing engine data but we're in backfilling state,
             // we should move to the next state
-            onStateChange?.('waiting-llm');
             return;
         }
 
-        console.log(`Backfilling engine data for ${missingEngineData.length} moves`);
         startedRef.current = true;
 
         // Create abort controller for this run
@@ -140,5 +129,5 @@ export function useBackfillEngineAnalysis({
                 abortControllerRef.current = null;
             }
         };
-    }, [gameId, sanHistory.length, analysis, analysisState, onStateChange, queryClient, uploadMutation]);
+    }, [gameId, sanHistory.length, analysis, analysisState, queryClient, uploadMutation]);
 } 

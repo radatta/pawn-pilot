@@ -1,6 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { gameAnalysisKey } from "@/lib/queries/game-analysis-tanstack";
-import { AnalysisState } from "./useAnalysisState";
 import React from "react";
 
 /**
@@ -9,7 +8,7 @@ import React from "react";
  * Triggers batch analysis for a game and invalidates the cache when complete.
  * Works with the FSM approach to update analysis state.
  */
-export function useTriggerAnalysis(onStateChange?: (state: AnalysisState) => void) {
+export function useTriggerAnalysis() {
     const queryClient = useQueryClient();
     const abortControllerRef = React.useRef<AbortController | null>(null);
 
@@ -23,8 +22,6 @@ export function useTriggerAnalysis(onStateChange?: (state: AnalysisState) => voi
             // Create new abort controller
             abortControllerRef.current = new AbortController();
 
-            onStateChange?.('waiting-llm');
-
             try {
                 const res = await fetch(`/api/games/${gameId}/analysis`, {
                     method: "POST",
@@ -32,14 +29,12 @@ export function useTriggerAnalysis(onStateChange?: (state: AnalysisState) => voi
                 });
 
                 if (!res.ok) {
-                    onStateChange?.('error');
                     throw new Error("Analysis request failed");
                 }
 
                 return (await res.json()) as { analysis: string[] };
             } catch (err) {
                 if ((err as Error).name === 'AbortError') {
-                    console.log('Analysis request aborted');
                     return { analysis: [] };
                 }
                 throw err;
@@ -53,8 +48,6 @@ export function useTriggerAnalysis(onStateChange?: (state: AnalysisState) => voi
             // invalidated query to refetch and then the useAnalysisState hook will
             // determine if we're actually complete
         },
-        onError: () => {
-            onStateChange?.('error');
-        }
+
     });
 } 
