@@ -70,6 +70,7 @@ export type Database = {
           id: number
           mate_in: number | null
           move_number: number
+          pv: string | null
         }
         Insert: {
           best_move?: string | null
@@ -80,6 +81,7 @@ export type Database = {
           id?: number
           mate_in?: number | null
           move_number: number
+          pv?: string | null
         }
         Update: {
           best_move?: string | null
@@ -90,6 +92,7 @@ export type Database = {
           id?: number
           mate_in?: number | null
           move_number?: number
+          pv?: string | null
         }
         Relationships: [
           {

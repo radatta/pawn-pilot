@@ -5,6 +5,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "format": "prettier --write .",
+    "supabase:push": "supabase db push --local",
     "supabase:reset": "supabase db reset --local",
     "supabase:typegen": "supabase gen types typescript --local --schema=public > lib/database.types.ts"
   },

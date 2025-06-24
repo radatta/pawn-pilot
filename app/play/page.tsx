@@ -18,10 +18,10 @@ import { AIAnalysis } from "@/components/ai-analysis";
 import { GameControls } from "@/components/game-controls";
 
 import {
-  getBestMove,
   terminateEngine,
   analyzePosition,
   initEngine,
+  getBestMove,
 } from "@/lib/engine/stockfish";
 import { useReviewableGame } from "@/lib/hooks/useReviewableGame";
 import { GameResult } from "../api/games/[gameId]/route";
@@ -314,13 +314,46 @@ export default function PlayPage() {
         gameCopy.loadPgn(game.pgn());
 
         try {
+          // Get the move quickly for gameplay
           const uci = await getBestMove(gameCopy.fen(), moveNumber);
-          // parse UCI, e.g., e2e4 or e7e8q
+
+          // Parse UCI and make the move immediately
           const from = uci.slice(0, 2);
           const to = uci.slice(2, 4);
           const promotion = uci.length === 5 ? uci[4] : undefined;
+          const positionBeforeMove = gameCopy.fen(); // Store position for analysis
           gameCopy.move({ from, to, promotion });
-          updateGame(gameCopy);
+
+          // Update game immediately for responsive UI
+          Bye.updateGame(gameCopy);
+
+          // Run analysis in background (don't await)
+          const currentMoveNumber = gameCopy.history().length;
+          analyzePosition(positionBeforeMove, 18)
+            .then(async (analysis) => {
+              try {
+                await fetch(`/api/games/${gameId}/analysis`, {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    updates: [
+                      {
+                        move_number: currentMoveNumber,
+                        best_move: analysis.bestMove,
+                        eval_cp: analysis.evaluationCp ?? null,
+                        mate_in: analysis.mateIn ?? null,
+                        pv: analysis.pv ?? null,
+                      },
+                    ],
+                  }),
+                });
+              } catch (err) {
+                console.error("Failed to store analysis data:", err);
+              }
+            })
+            .catch((err) => {
+              console.error("Background analysis failed:", err);
+            });
         } catch (err) {
           toast.error(err instanceof Error ? err.message : "An error occurred");
           if (err instanceof Error && err.message === "WASM not supported") {
@@ -484,13 +517,6 @@ export default function PlayPage() {
     };
 
     preloadEngine();
-  }, []);
-
-  // Cleanup Stockfish engine on unmount
-  useEffect(() => {
-    return () => {
-      terminateEngine();
-    };
   }, []);
 
   return (

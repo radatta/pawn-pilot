@@ -94,14 +94,12 @@ export default function AnalysisPage() {
     sanHistory: fullSanHistory,
     analysis: batchAnalysis,
     onAnalysisComplete: () => {
-      console.log("onAnalysisComplete", pgnParam, gameId);
       if (pgnParam && gameId) {
         // Remove PGN from search params since analysis is now complete and stored on server
         const newSearchParams = new URLSearchParams(searchParams.toString());
         newSearchParams.delete("pgn");
         const newUrl = `${window.location.pathname}?${newSearchParams.toString()}`;
         router.replace(newUrl);
-        console.log("newUrl", newUrl);
       }
     },
   });

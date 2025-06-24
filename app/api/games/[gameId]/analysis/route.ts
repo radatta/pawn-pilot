@@ -127,7 +127,7 @@ export const POST = withErrorHandling(async function POST(req: NextRequest, { pa
                 const { fen, history } = positions[idx];
                 active++;
                 console.debug(`[ANALYZE] Requesting analysis for ply ${idx}`);
-                generateText({ model: openai(process.env.OPENAI_MODEL ?? "gpt-4o"), prompt: analysisPrompt({ fen, gameHistory: history }) })
+                generateText({ model: openai(process.env.OPENAI_MODEL ?? "gpt-4o"), prompt: analysisPrompt({ fen, gameHistory: history, pv: "" }) })
                     .then((res) => {
                         // res.text according to typings
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -165,7 +165,7 @@ export const GET = withErrorHandling(async function GET(
 
     const { data, error } = await supabase
         .from("move_analysis")
-        .select("move_number, explanation, best_move, eval_cp, mate_in")
+        .select("move_number, explanation, best_move, eval_cp, mate_in, pv")
         .eq("game_id", gameId)
         .order("move_number");
 
@@ -179,6 +179,7 @@ export const GET = withErrorHandling(async function GET(
         best_move: (row as { best_move?: string }).best_move ?? null,
         eval_cp: (row as { eval_cp?: number | null }).eval_cp ?? null,
         mate_in: (row as { mate_in?: number | null }).mate_in ?? null,
+        pv: (row as { pv?: string | null }).pv ?? null,
     }));
 
     return NextResponse.json({ analysis });
@@ -201,7 +202,7 @@ export const PUT = withErrorHandling(async function PUT(
 
     const body = await req.json();
     const updates = body?.updates as
-        | { move_number: number; best_move: string; eval_cp?: number; mate_in?: number }[]
+        | { move_number: number; best_move: string; eval_cp?: number; mate_in?: number; pv?: string }[]
         | undefined;
 
     if (!updates || !Array.isArray(updates) || updates.length === 0) {
@@ -215,6 +216,7 @@ export const PUT = withErrorHandling(async function PUT(
         best_move: u.best_move,
         eval_cp: u.eval_cp ?? null,
         mate_in: u.mate_in ?? null,
+        pv: u.pv ?? null,
     }));
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

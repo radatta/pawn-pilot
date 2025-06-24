@@ -26,6 +26,7 @@ export function useTriggerAnalysis() {
                 best_move: null,
                 eval_cp: null,
                 mate_in: null,
+                pv: null,
             }));
 
             // Cache the analysis so other components can access it immediately.

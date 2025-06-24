@@ -11,13 +11,12 @@ interface UseBackfillEngineOptions {
     onAnalysisComplete?: () => void;
 }
 
-// Runs client-side Stockfish to fill in missing best_move/eval_cp/mate_in
+// Runs client-side Stockfish to fill in missing best_move/eval_cp/mate_in/pv data
 export function useBackfillEngineAnalysis({ gameId, sanHistory, analysis, onAnalysisComplete }: UseBackfillEngineOptions) {
     const queryClient = useQueryClient();
 
-
     const uploadMutation = useMutation({
-        mutationFn: async (updates: { move_number: number; best_move: string; eval_cp?: number; mate_in?: number }[]) => {
+        mutationFn: async (updates: { move_number: number; best_move: string; eval_cp?: number; mate_in?: number; pv?: string }[]) => {
             if (!gameId) return;
             const response = await fetch(`/api/games/${gameId}/analysis`, {
                 method: "PUT",
@@ -57,35 +56,42 @@ export function useBackfillEngineAnalysis({ gameId, sanHistory, analysis, onAnal
 
         (async () => {
             const chess = new Chess();
-            const updates: { move_number: number; best_move: string; eval_cp?: number; mate_in?: number }[] = [];
+            const updates: { move_number: number; best_move: string; eval_cp?: number; mate_in?: number; pv?: string }[] = [];
+
             for (let i = 0; i < sanHistory.length && !cancelled; i++) {
                 const san = sanHistory[i];
                 chess.move(san);
                 if (!missing.includes(i)) continue;
 
                 try {
-                    const res = await analyzePosition(chess.fen(), 12);
+                    const res = await analyzePosition(chess.fen(), 18); // Use full depth for backfill
                     updates.push({
                         move_number: i + 1,
                         best_move: res.bestMove,
                         eval_cp: res.evaluationCp,
                         mate_in: res.mateIn,
+                        pv: res.pv,
                     });
 
-                    // optimistic cache update
+                    // Optimistic cache update
                     queryClient.setQueryData(gameAnalysisKey(gameId), (old: PlyAnalysis[] | undefined) => {
                         if (!old) return old;
                         const copy = [...old];
-                        const row = copy[i] ?? { explanation: "", best_move: null, eval_cp: null, mate_in: null };
-                        copy[i] = { ...row, best_move: res.bestMove, eval_cp: res.evaluationCp ?? null, mate_in: res.mateIn ?? null };
+                        const row = copy[i] ?? { explanation: "", best_move: null, eval_cp: null, mate_in: null, pv: null };
+                        copy[i] = {
+                            ...row,
+                            best_move: res.bestMove,
+                            eval_cp: res.evaluationCp ?? null,
+                            mate_in: res.mateIn ?? null,
+                            pv: res.pv ?? null,
+                        };
                         return copy;
                     });
                 } catch (err) {
-                    console.error("Stockfish backfill error", err);
+                    console.error(`Stockfish backfill error for move ${i + 1}:`, err);
                 }
             }
 
-            console.log("useBackfillEngineAnalysis - updates", cancelled, updates.length);
             if (!cancelled && updates.length) {
                 uploadMutationRef.current.mutate(updates);
             }

@@ -5,6 +5,7 @@ export interface PlyAnalysis {
     best_move: string | null;
     eval_cp: number | null;
     mate_in: number | null;
+    pv: string | null;
 }
 
 export const gameAnalysisKey = (id: string) => ["gameAnalysis", id] as const;
