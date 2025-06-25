@@ -25,7 +25,7 @@ import {
   getBestMove,
 } from "@/lib/engine/stockfish";
 import { useReviewableGame } from "@/lib/hooks/useReviewableGame";
-import { GameResult } from "../api/games/[gameId]/route";
+import { GameResult } from "@/lib/validation/schemas";
 import { useFlaggedMoves } from "@/lib/hooks/useFlaggedMoves";
 import { useToggleFlag } from "@/lib/hooks/useToggleFlag";
 import { useTriggerAnalysis } from "@/lib/hooks/useTriggerAnalysis";

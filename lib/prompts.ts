@@ -39,12 +39,22 @@ Suggest the strongest continuation for the side to move and briefly explain why 
 export function analysisPrompt({
     fen,
     gameHistory,
-    pv
+    pv,
+    evalCp,
+    mateIn
 }: {
     fen: string;
     gameHistory: string;
     pv: string;
+    evalCp?: number;
+    mateIn?: number;
 }): string {
+    // Build evaluation string if we have engine data
+    let evalString = "";
+    if (evalCp !== undefined || mateIn !== undefined) {
+        evalString = `\nEngine evaluation: ${mateIn !== undefined ? `Mate in ${mateIn}` : `${evalCp} centipawns`}`;
+    }
+
     return `You are a grandmaster-level chess coach giving advice to the WHITE player.
 
 For each position, you will:
@@ -63,5 +73,5 @@ Advice: Play Rab1 immediately, attacking the exposed queen and forcing a winning
 Complete the following analysis:
 Position (FEN): "${fen}"
 Full game history: "${gameHistory}"
-Principal variation: "${pv}"`;
+Principal variation: "${pv}"${evalString}`;
 } 

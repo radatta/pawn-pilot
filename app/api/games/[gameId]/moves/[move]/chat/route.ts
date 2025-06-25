@@ -2,20 +2,31 @@ import { NextRequest, NextResponse } from "next/server";
 import { withErrorHandling } from "@/lib/utils/api-error-wrapper";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { pawnPilotSystemPrompt } from "@/lib/prompts";
-import { ChatRequestSchema } from "@/lib/validation/chat";
+import { ChatRequestSchema, ChatMessageSchema } from "@/lib/validation/chat";
+import { MoveChatInsertSchema } from "@/lib/validation/schemas";
+import {
+    validateRequest,
+    validateParams,
+    moveRouteParamsSchema
+} from "@/lib/validation/utils";
 import { streamText } from "ai";
 import { openai } from "@ai-sdk/openai";
+
+// Define a type for chat messages to avoid any[] casts
+type ChatMessageType = {
+    role: "user" | "assistant" | "system";
+    content: string;
+    created_at: string;
+};
 
 export const GET = withErrorHandling(async function GET(
     _req: NextRequest,
     { params }: { params: Promise<{ gameId: string; move: string }> }
 ) {
-    const { gameId, move } = await params;
+    const [parsedParams, paramsError] = await validateParams(await params, moveRouteParamsSchema);
+    if (paramsError) return paramsError;
 
-    const moveNumber = parseInt(move, 10);
-    if (!Number.isFinite(moveNumber) || moveNumber < 1) {
-        return NextResponse.json({ error: "Invalid move number" }, { status: 400 });
-    }
+    const { gameId, moveNumber } = parsedParams;
 
     const supabase = await createSupabaseServer();
 
@@ -42,11 +53,10 @@ export const POST = withErrorHandling(async function POST(
     req: NextRequest,
     { params }: { params: Promise<{ gameId: string; move: string }> },
 ) {
-    const { gameId, move } = await params;
-    const moveNumber = parseInt(move, 10);
-    if (!Number.isFinite(moveNumber) || moveNumber < 1) {
-        return NextResponse.json({ error: "Invalid move number" }, { status: 400 });
-    }
+    const [parsedParams, paramsError] = await validateParams(await params, moveRouteParamsSchema);
+    if (paramsError) return paramsError;
+
+    const { gameId, moveNumber } = parsedParams;
 
     const body = await req.json();
     const supabase = await createSupabaseServer();
@@ -54,7 +64,7 @@ export const POST = withErrorHandling(async function POST(
     // Handle AI SDK format (useChat sends { messages: [...] })
     if (body.messages && Array.isArray(body.messages)) {
         const { messages } = body;
-        const lastUserMessage = messages.filter((m: any) => m.role === "user").pop();
+        const lastUserMessage = messages.filter((m: { role: string; content: string }) => m.role === "user").pop();
 
         if (!lastUserMessage || !lastUserMessage.content) {
             return NextResponse.json({ error: "No user message found" }, { status: 400 });
@@ -80,8 +90,15 @@ export const POST = withErrorHandling(async function POST(
             created_at: new Date().toISOString()
         };
 
-        const existingMessages = existingChat?.messages ?? [];
-        const updatedMessages = [...existingMessages, userMessage];
+        // Validate user message
+        const userMessageResult = ChatMessageSchema.safeParse(userMessage);
+        if (!userMessageResult.success) {
+            console.error("[MoveChat] Invalid user message:", userMessageResult.error);
+            return NextResponse.json({ error: "Invalid user message format" }, { status: 400 });
+        }
+
+        const existingMessages = (existingChat?.messages ?? []) as ChatMessageType[];
+        const updatedMessages = [...existingMessages, userMessageResult.data];
 
         // Insert or update chat history
         if (existingChat) {
@@ -95,13 +112,21 @@ export const POST = withErrorHandling(async function POST(
                 return NextResponse.json({ error: updateError.message }, { status: 500 });
             }
         } else {
+            const moveChatData = {
+                game_id: gameId,
+                move_number: moveNumber,
+                messages: updatedMessages
+            };
+
+            const moveChatResult = MoveChatInsertSchema.safeParse(moveChatData);
+            if (!moveChatResult.success) {
+                console.error("[MoveChat] Invalid move chat data:", moveChatResult.error);
+                return NextResponse.json({ error: "Invalid move chat data" }, { status: 400 });
+            }
+
             const { error: insertError } = await supabase
                 .from("move_chat")
-                .insert({
-                    game_id: gameId,
-                    move_number: moveNumber,
-                    messages: updatedMessages
-                });
+                .insert(moveChatResult.data);
 
             if (insertError) {
                 console.error("[MoveChat] insert error", insertError);
@@ -151,7 +176,7 @@ export const POST = withErrorHandling(async function POST(
         const result = streamText({
             model: openai(process.env.OPENAI_MODEL ?? "gpt-4o"),
             system: systemPrompt,
-            messages: historyMsgs as any,
+            messages: historyMsgs,
             onFinish: async (completion) => {
                 // Persist assistant message once stream is complete
                 const assistantMessage = {
@@ -159,6 +184,13 @@ export const POST = withErrorHandling(async function POST(
                     content: completion.text || "(error)",
                     created_at: new Date().toISOString()
                 };
+
+                // Validate assistant message
+                const assistantMessageResult = ChatMessageSchema.safeParse(assistantMessage);
+                if (!assistantMessageResult.success) {
+                    console.error("[MoveChat] Invalid assistant message:", assistantMessageResult.error);
+                    return;
+                }
 
                 const { data: latestChat } = await supabase
                     .from("move_chat")
@@ -168,10 +200,11 @@ export const POST = withErrorHandling(async function POST(
                     .single();
 
                 if (latestChat) {
+                    const latestMessages = (latestChat.messages ?? []) as ChatMessageType[];
                     const { error: updateError } = await supabase
                         .from("move_chat")
                         .update({
-                            messages: [...latestChat.messages, assistantMessage]
+                            messages: [...latestMessages, assistantMessageResult.data]
                         })
                         .eq("id", latestChat.id);
 
@@ -186,10 +219,9 @@ export const POST = withErrorHandling(async function POST(
     }
 
     // Handle legacy format
-    const parseResult = ChatRequestSchema.safeParse(body);
-    if (!parseResult.success) {
-        return NextResponse.json({ error: "Invalid request" }, { status: 400 });
-    }
+    const [parsedBody, bodyError] = await validateRequest(body, ChatRequestSchema);
+    if (bodyError) return bodyError;
+
     const {
         content,
         fen_before: suppliedFen,
@@ -198,7 +230,7 @@ export const POST = withErrorHandling(async function POST(
         eval_cp: suppliedEval,
         mate_in: suppliedMate,
         explanation: suppliedExplanation,
-    } = parseResult.data;
+    } = parsedBody;
 
     // Get existing chat history or create new entry
     const { data: existingChat, error: fetchError } = await supabase
@@ -220,8 +252,15 @@ export const POST = withErrorHandling(async function POST(
         created_at: new Date().toISOString()
     };
 
-    const existingMessages = existingChat?.messages ?? [];
-    const updatedMessages = [...existingMessages, userMessage];
+    // Validate user message
+    const userMessageResult = ChatMessageSchema.safeParse(userMessage);
+    if (!userMessageResult.success) {
+        console.error("[MoveChat] Invalid user message:", userMessageResult.error);
+        return NextResponse.json({ error: "Invalid user message format" }, { status: 400 });
+    }
+
+    const existingMessages = (existingChat?.messages ?? []) as ChatMessageType[];
+    const updatedMessages = [...existingMessages, userMessageResult.data];
 
     // Insert or update chat history
     if (existingChat) {
@@ -235,13 +274,21 @@ export const POST = withErrorHandling(async function POST(
             return NextResponse.json({ error: updateError.message }, { status: 500 });
         }
     } else {
+        const moveChatData = {
+            game_id: gameId,
+            move_number: moveNumber,
+            messages: updatedMessages
+        };
+
+        const moveChatResult = MoveChatInsertSchema.safeParse(moveChatData);
+        if (!moveChatResult.success) {
+            console.error("[MoveChat] Invalid move chat data:", moveChatResult.error);
+            return NextResponse.json({ error: "Invalid move chat data" }, { status: 400 });
+        }
+
         const { error: insertError } = await supabase
             .from("move_chat")
-            .insert({
-                game_id: gameId,
-                move_number: moveNumber,
-                messages: updatedMessages
-            });
+            .insert(moveChatResult.data);
 
         if (insertError) {
             console.error("[MoveChat] insert error", insertError);
@@ -296,6 +343,13 @@ export const POST = withErrorHandling(async function POST(
                 created_at: new Date().toISOString()
             };
 
+            // Validate assistant message
+            const assistantMessageResult = ChatMessageSchema.safeParse(assistantMessage);
+            if (!assistantMessageResult.success) {
+                console.error("[MoveChat] Invalid assistant message:", assistantMessageResult.error);
+                return;
+            }
+
             const { data: latestChat } = await supabase
                 .from("move_chat")
                 .select("id, messages")
@@ -304,10 +358,11 @@ export const POST = withErrorHandling(async function POST(
                 .single();
 
             if (latestChat) {
+                const latestMessages = (latestChat.messages ?? []) as ChatMessageType[];
                 const { error: updateError } = await supabase
                     .from("move_chat")
                     .update({
-                        messages: [...latestChat.messages, assistantMessage]
+                        messages: [...latestMessages, assistantMessageResult.data]
                     })
                     .eq("id", latestChat.id);
 

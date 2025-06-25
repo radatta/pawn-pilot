@@ -1,44 +1,27 @@
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { withErrorHandling } from "@/lib/utils/api-error-wrapper";
 import { NextResponse } from "next/server";
-import { z } from "zod";
-import { Chess } from "chess.js";
 import { NextRequest } from "next/server";
-
-const GameStatusSchema = z.enum(["in_progress", "completed"]);
-
-const GameResultSchema = z.enum([
-    "checkmate",
-    "draw",
-    "resigned",
-    "stalemate",
-    "insufficient_material",
-    "threefold_repetition",
-    "timeout",
-]);
-
-export type GameResult = z.infer<typeof GameResultSchema>;
-
-const ClockHistorySchema = z.array(z.object({ white: z.number(), black: z.number() }));
-
-const BodySchema = z.object({
-    pgn: z.string().optional(),
-    status: GameStatusSchema.optional(),
-    result: GameResultSchema.optional(),
-    white_time_remaining: z.number().optional(),
-    black_time_remaining: z.number().optional(),
-    last_move_timestamp: z.string().optional(),
-    clock_history: ClockHistorySchema.optional(),
-});
+import { Chess } from "chess.js";
+import {
+    GameUpdateRequestSchema,
+    MoveHistoryInsertSchema,
+    MoveHistoryInsert
+} from "@/lib/validation/schemas";
+import {
+    validateRequest,
+    validateParams,
+    gameRouteParamsSchema
+} from "@/lib/validation/utils";
 
 export const GET = withErrorHandling(async function GET(
     _req: NextRequest,
     { params }: { params: Promise<{ gameId: string }> }
 ) {
-    const { gameId } = await params;
-    if (!gameId) {
-        return NextResponse.json({ error: "Missing gameId" }, { status: 400 });
-    }
+    const [parsedParams, paramsError] = await validateParams(await params, gameRouteParamsSchema);
+    if (paramsError) return paramsError;
+
+    const { gameId } = parsedParams;
 
     const supabase = await createSupabaseServer();
     const {
@@ -72,10 +55,10 @@ export const PUT = withErrorHandling(async function PUT(
     req: NextRequest,
     { params }: { params: Promise<{ gameId: string }> }
 ) {
-    const { gameId } = await params;
-    if (!gameId) {
-        return NextResponse.json({ error: "Missing gameId" }, { status: 400 });
-    }
+    const [parsedParams, paramsError] = await validateParams(await params, gameRouteParamsSchema);
+    if (paramsError) return paramsError;
+
+    const { gameId } = parsedParams;
 
     const supabase = await createSupabaseServer();
     const {
@@ -95,24 +78,20 @@ export const PUT = withErrorHandling(async function PUT(
         );
     }
 
-    const parsedBody = BodySchema.safeParse(body);
+    const [parsedBody, bodyError] = await validateRequest(body, GameUpdateRequestSchema);
+    if (bodyError) return bodyError;
 
-    if (!parsedBody.success) {
-        console.error(parsedBody.error);
-        return NextResponse.json({ error: "Invalid body" }, { status: 400 });
-    }
-
-    const { pgn, status, result, white_time_remaining, black_time_remaining, last_move_timestamp, clock_history } = parsedBody.data;
+    const { pgn, status, result, white_time_remaining, black_time_remaining, last_move_timestamp, clock_history } = parsedBody;
 
     // Build update object
     const updateData: {
         pgn?: string;
-        status?: z.infer<typeof GameStatusSchema>;
-        result?: GameResult;
+        status?: typeof status;
+        result?: typeof result;
         white_time_remaining?: number;
         black_time_remaining?: number;
         last_move_timestamp?: string;
-        clock_history?: z.infer<typeof ClockHistorySchema>;
+        clock_history?: typeof clock_history;
     } = {};
     if (pgn !== undefined) updateData.pgn = pgn;
     if (status !== undefined) updateData.status = status;
@@ -197,16 +176,30 @@ export const PUT = withErrorHandling(async function PUT(
             }
 
             if (rowsToInsert.length > 0) {
-                const { error: insertError } = await supabase
-                    .from("move_history")
-                    .upsert(rowsToInsert, {
-                        onConflict: "game_id,move_number",
-                        ignoreDuplicates: true,
-                    });
+                // Validate move history records
+                const validatedRows: MoveHistoryInsert[] = [];
 
-                if (insertError) {
-                    console.error("move_history insert error", insertError);
-                    // We swallow the error to avoid breaking the game update flow.
+                for (const row of rowsToInsert) {
+                    const result = MoveHistoryInsertSchema.safeParse(row);
+                    if (result.success) {
+                        validatedRows.push(result.data);
+                    } else {
+                        console.error("Invalid move history row:", result.error);
+                    }
+                }
+
+                if (validatedRows.length > 0) {
+                    const { error: insertError } = await supabase
+                        .from("move_history")
+                        .upsert(validatedRows, {
+                            onConflict: "game_id,move_number",
+                            ignoreDuplicates: true,
+                        });
+
+                    if (insertError) {
+                        console.error("move_history insert error", insertError);
+                        // We swallow the error to avoid breaking the game update flow.
+                    }
                 }
             }
         } catch (err) {
