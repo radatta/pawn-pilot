@@ -7,7 +7,7 @@ import { Chessboard } from "@/components/chessboard";
 import { MoveHistory } from "@/components/move-history";
 import { AIAnalysis } from "@/components/ai-analysis";
 import { Square, Chess } from "chess.js";
-import { terminateEngine } from "@/lib/engine/stockfish";
+import { terminateEngine, analyzePosition } from "@/lib/engine/stockfish";
 import { useReviewableGame } from "@/lib/hooks/useReviewableGame";
 import useSupabaseBrowser from "@/lib/supabase/client";
 import { useGameById } from "@/lib/queries/game-tanstack";
@@ -20,6 +20,9 @@ import { useGameAnalysis, PlyAnalysis } from "@/lib/queries/game-analysis-tansta
 import { useBackfillEngineAnalysis } from "@/lib/hooks/useBackfillEngineAnalysis";
 import { useTriggerAnalysis } from "@/lib/hooks/useTriggerAnalysis";
 import { useAnalysisState } from "@/lib/hooks/useAnalysisState";
+import { MoveChatDrawer } from "@/components/move-chat-drawer";
+import { MoveChatButton } from "@/components/move-chat-button";
+import { ChatContext } from "@/lib/types";
 
 function AnalysisPageContent() {
   const searchParams = useSearchParams();
@@ -30,6 +33,11 @@ function AnalysisPageContent() {
     useReviewableGame();
 
   const clock = useChessClock({ start: 300, increment: 0 });
+
+  // Chat state
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatPly, setChatPly] = useState<number>(1);
+  const [chatContext, setChatContext] = useState<ChatContext | null>(null);
 
   // Flagged moves
   const { data: flaggedPlies = [] } = useFlaggedMoves(gameId ?? undefined);
@@ -283,11 +291,65 @@ function AnalysisPageContent() {
               currentPly={currentPly}
               onSelect={goToPly}
               onToggleFlag={() => {}}
+              onChat={async (ply) => {
+                setChatPly(ply + 1);
+                setChatOpen(true);
+
+                // compute context asynchronously
+                const chessCopy = new Chess();
+                chessCopy.loadPgn(game.pgn());
+                chessCopy.reset();
+                effectiveSanHistory.slice(0, ply).forEach((m) => chessCopy.move(m));
+                const fen_before = chessCopy.fen();
+                const move_san = effectiveSanHistory[ply] ?? "";
+                const engineRes = await analyzePosition(fen_before, 12);
+                setChatContext({
+                  fen_before,
+                  move_san,
+                  pv: engineRes.pv ?? "",
+                  eval_cp: engineRes.evaluationCp ?? null,
+                  mate_in: engineRes.mateIn ?? null,
+                });
+              }}
             />
 
             <AIAnalysis analysis={analysis} isThinking={isThinking} />
+            <div className="flex justify-end">
+              <MoveChatButton
+                onClick={async () => {
+                  setChatPly(currentPly + 1);
+                  setChatOpen(true);
+
+                  const chessCopy = new Chess();
+                  chessCopy.loadPgn(game.pgn());
+                  chessCopy.reset();
+                  effectiveSanHistory
+                    .slice(0, currentPly)
+                    .forEach((m) => chessCopy.move(m));
+                  const fen_before = chessCopy.fen();
+                  const move_san = effectiveSanHistory[currentPly] ?? "";
+                  const engineRes = await analyzePosition(fen_before, 12);
+                  setChatContext({
+                    fen_before,
+                    move_san,
+                    pv: engineRes.pv ?? "",
+                    eval_cp: engineRes.evaluationCp ?? null,
+                    mate_in: engineRes.mateIn ?? null,
+                  });
+                }}
+              />
+            </div>
           </>
         }
+      />
+
+      {/* Chat Drawer */}
+      <MoveChatDrawer
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        gameId={gameId}
+        ply={chatPly}
+        context={chatContext ?? undefined}
       />
     </div>
   );

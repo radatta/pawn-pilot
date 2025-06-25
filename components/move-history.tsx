@@ -21,8 +21,8 @@ interface MoveHistoryProps {
   onSelect?: (ply: number) => void;
   /** Optional callback to toggle flag */
   onToggleFlag?: (ply: number, currentlyFlagged: boolean) => void;
-  /** Optional callback to open chat */
-  onChat?: (ply: number) => void;
+  /** Callback to open chat */
+  onChat: (ply: number) => void;
 }
 
 export function MoveHistory({
@@ -111,8 +111,8 @@ export function MoveHistory({
                     </div>
                   )}
 
-                  {/* Chat button at end of row */}
-                  {onChat && <MoveChatButton onClick={() => onChat(whiteIdx)} />}
+                  {/* Chat button at end of row - always present */}
+                  <MoveChatButton onClick={() => onChat(whiteIdx)} />
                 </div>
               );
             })
