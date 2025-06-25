@@ -21,6 +21,7 @@ import {
   terminateEngine,
   analyzePosition,
   initEngine,
+  initAnalysisEngine,
   getBestMove,
 } from "@/lib/engine/stockfish";
 import { useReviewableGame } from "@/lib/hooks/useReviewableGame";
@@ -298,45 +299,48 @@ function PlayPageContent() {
     const newMoveCount = newGame.history().length;
 
     if (gameId && newMoveCount > currentMoveCount) {
-      // A new move was made - store analysis for it
-      const moveNumber = newMoveCount;
+      // A new move was made - run analysis in a non-blocking way
+      storeAnalysisForMove(gameId, newGame, newMoveCount);
+    }
+  };
 
-      // Get the position before the move was made
-      const gameCopy = new Chess();
-      gameCopy.loadPgn(newGame.pgn());
-      // Undo the last move to get position before
-      const lastMove = gameCopy.undo();
-      const positionBeforeMove = gameCopy.fen();
+  // Separate function to handle analysis without blocking the main game flow
+  const storeAnalysisForMove = (gameId: string, newGame: Chess, moveNumber: number) => {
+    // Get the position before the move was made
+    const gameCopy = new Chess();
+    gameCopy.loadPgn(newGame.pgn());
+    // Undo the last move to get position before
+    const lastMove = gameCopy.undo();
+    const positionBeforeMove = gameCopy.fen();
 
-      if (lastMove) {
-        // Run analysis in background for the position before the move
-        analyzePosition(positionBeforeMove, 18)
-          .then(async (analysis) => {
-            try {
-              await fetch(`/api/games/${gameId}/analysis`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  updates: [
-                    {
-                      move_number: moveNumber,
-                      best_move: analysis.bestMove,
-                      eval_cp: analysis.evaluationCp ?? null,
-                      mate_in: analysis.mateIn ?? null,
-                      pv: analysis.pv ?? null,
-                    },
-                  ],
-                }),
-              });
-              console.log(`Stored analysis for move ${moveNumber}`);
-            } catch (err) {
-              console.error("Failed to store analysis data:", err);
-            }
-          })
-          .catch((err) => {
-            console.error("Background analysis failed:", err);
-          });
-      }
+    if (lastMove) {
+      // Run analysis in background for the position before the move
+      analyzePosition(positionBeforeMove, 18)
+        .then(async (analysis) => {
+          try {
+            await fetch(`/api/games/${gameId}/analysis`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                updates: [
+                  {
+                    move_number: moveNumber,
+                    best_move: analysis.bestMove,
+                    eval_cp: analysis.evaluationCp ?? null,
+                    mate_in: analysis.mateIn ?? null,
+                    pv: analysis.pv ?? null,
+                  },
+                ],
+              }),
+            });
+            console.log(`Stored analysis for move ${moveNumber}`);
+          } catch (err) {
+            console.error("Failed to store analysis data:", err);
+          }
+        })
+        .catch((err) => {
+          console.error("Background analysis failed:", err);
+        });
     }
   };
 
@@ -527,6 +531,7 @@ function PlayPageContent() {
     const preloadEngine = async () => {
       try {
         await initEngine();
+        await initAnalysisEngine();
       } catch (error) {
         console.warn("Failed to preload Stockfish engine:", error);
         // Don't show error to user as this is just a performance optimization

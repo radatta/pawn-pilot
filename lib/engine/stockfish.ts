@@ -2,22 +2,25 @@
 // This is executed client-side only.
 
 let stockfishWorker: Worker | null = null;
+let analysisWorker: Worker | null = null;
 
 // Indicates the engine has answered `uci` or `isready` with the corresponding
 // *ok message and is therefore ready to accept a new command.
 let ready = false;
+let analysisReady = false;
 
 // Resolvers waiting for a `readyok` (or `uciok`) response.
 const readyResolvers: Array<() => void> = [];
+const analysisReadyResolvers: Array<() => void> = [];
 
 // Resolvers waiting for a `bestmove` response.
 const pendingMoveResolvers: Array<(best: string) => void> = [];
+const analysisMoveResolvers: Array<(best: string) => void> = [];
 
 // Resolvers waiting for analysis info callbacks.
 const infoCallbacks: Array<(info: ParsedInfo) => void> = [];
+const analysisInfoCallbacks: Array<(info: ParsedInfo) => void> = [];
 
-// Track the current strength set in the engine.
-let strength = false;
 
 const OPENING_PV = 1;
 const MIDGAME_PV = 2;
@@ -28,33 +31,6 @@ interface ParsedInfo {
     score?: { unit: "cp" | "mate"; value: number };
     multipv?: number;
     pv?: string;
-}
-
-async function setStrength(weak: boolean) {
-    // No need to send commands if the state is already what we want.
-    if (strength === weak) return;
-
-    // Engine must be initialized before setting options
-    if (!stockfishWorker) throw new Error("Engine not initialized");
-
-    if (weak) {
-        // Set to a limited ELO for gameplay
-        ready = false;
-        stockfishWorker!.postMessage("setoption name UCI_LimitStrength value true");
-        // stockfishWorker!.postMessage("setoption name UCI_Elo value 600");
-        stockfishWorker!.postMessage("setoption name MultiPV value 3");
-        stockfishWorker!.postMessage("setoption name Skill Level value 0");
-        stockfishWorker!.postMessage("isready");
-        await waitUntilReady();
-    } else {
-        // Set to full strength for analysis
-        ready = false;
-        stockfishWorker!.postMessage("setoption name UCI_LimitStrength value false");
-        stockfishWorker!.postMessage("setoption name MultiPV value 1");
-        stockfishWorker!.postMessage("isready");
-        await waitUntilReady();
-    }
-    strength = weak;
 }
 
 async function initEngine() {
@@ -116,9 +92,73 @@ async function initEngine() {
     await waitUntilReady();
 }
 
+async function initAnalysisEngine() {
+    if (analysisWorker) return;
+
+    if (!wasmThreadsSupported()) {
+        throw new Error("WASM not supported");
+    }
+
+    analysisWorker = new window.Worker("/lib/stockfish-16.1.js#/lib/stockfish-16.1.wasm");
+
+    analysisWorker.onmessage = (e: MessageEvent<string>) => {
+        const line: string = e.data;
+
+        if (line === "uciok" || line === "readyok") {
+            analysisReady = true;
+            // flush all promises waiting for readiness
+            while (analysisReadyResolvers.length) analysisReadyResolvers.shift()?.();
+            return;
+        }
+
+        if (line.startsWith("bestmove")) {
+            const move = line.split(" ")[1];
+            const resolve = analysisMoveResolvers.shift();
+            resolve?.(move);
+            return;
+        }
+
+        // Dispatch info lines to registered callbacks for analysis use-cases
+        if (line.startsWith("info")) {
+            const parsed: ParsedInfo = {};
+            const tokens = line.split(" ");
+            for (let i = 0; i < tokens.length; i++) {
+                const token = tokens[i];
+                if (token === "depth") {
+                    parsed.depth = parseInt(tokens[i + 1]);
+                    i++;
+                } else if (token === "score") {
+                    const unit = tokens[i + 1] as "cp" | "mate";
+                    const value = parseInt(tokens[i + 2]);
+                    parsed.score = { unit, value };
+                    i += 2;
+                } else if (token === "multipv") {
+                    parsed.multipv = parseInt(tokens[i + 1]);
+                    i++;
+                } else if (token === "pv") {
+                    parsed.pv = tokens.slice(i + 1).join(" ");
+                    break; // rest of line is PV
+                }
+            }
+            analysisInfoCallbacks.forEach((cb) => cb(parsed));
+            return;
+        }
+    };
+
+    // Start the UCI handshake
+    analysisReady = false;
+    analysisWorker.postMessage("uci");
+    await waitUntilAnalysisReady();
+}
+
 function waitUntilReady(): Promise<void> {
     if (ready) return Promise.resolve();
     return new Promise((res) => readyResolvers.push(res));
+}
+
+function waitUntilAnalysisReady(): Promise<void> {
+    if (analysisReady) return Promise.resolve();
+    return new Promise((res) => analysisReadyResolvers.push(res));
 }
 
 function getPv(moveNumber: number) {
@@ -132,9 +172,13 @@ export async function getBestMove(fen: string, moveNumber: number): Promise<stri
     if (typeof window === "undefined") throw new Error("Engine can run only in browser");
 
     await initEngine();
+    if (!stockfishWorker) throw new Error("Engine not initialized");
     // Set engine to a weaker playing strength.
     // This will only send commands if the strength is not already set to this ELO.
-    await setStrength(true);
+    stockfishWorker!.postMessage("setoption name UCI_LimitStrength value true");
+    // stockfishWorker!.postMessage("setoption name UCI_Elo value 600");
+    stockfishWorker!.postMessage("setoption name MultiPV value 3");
+    stockfishWorker!.postMessage("setoption name Skill Level value 0");
 
     // Prepare position and wait for the engine to acknowledge with `readyok`.
     ready = false;
@@ -186,10 +230,16 @@ export function terminateEngine() {
     ready = false;
     readyResolvers.length = 0;
     pendingMoveResolvers.length = 0;
+
+    analysisWorker?.terminate();
+    analysisWorker = null;
+    analysisReady = false;
+    analysisReadyResolvers.length = 0;
+    analysisMoveResolvers.length = 0;
 }
 
 // Export initEngine so it can be preloaded
-export { initEngine };
+export { initEngine, initAnalysisEngine };
 
 // Renamed to conform to TS/JS naming conventions (fix #9)
 export type StockfishState = "Loading" | "Ready" | "Waiting" | "Failed";
@@ -247,20 +297,20 @@ export async function analyzePosition(
 ): Promise<AnalysisResult> {
     if (typeof window === "undefined") throw new Error("Engine can run only in browser");
 
-    await initEngine();
+    await initAnalysisEngine();
     // Set engine to full strength for analysis.
     // This will only send commands if the strength is not already set to full.
-    await setStrength(false);
 
     // Prepare position and wait for the engine to acknowledge with `readyok`.
-    ready = false;
-    stockfishWorker!.postMessage("ucinewgame");
-    stockfishWorker!.postMessage(`position fen ${fen}`);
-    stockfishWorker!.postMessage("isready");
-    await waitUntilReady();
+    analysisReady = false;
+    analysisWorker!.postMessage("ucinewgame");
+    analysisWorker!.postMessage(`position fen ${fen}`);
+    analysisWorker!.postMessage("setoption name MultiPV value 1");
+    analysisWorker!.postMessage("isready");
+    await waitUntilAnalysisReady();
 
     return new Promise((resolve, reject) => {
-        if (!stockfishWorker) return reject("Engine not initialised");
+        if (!analysisWorker) return reject("Analysis engine not initialised");
 
         let latestDepth = 0;
         let evaluationCp: number | undefined;
@@ -282,20 +332,20 @@ export async function analyzePosition(
             }
         };
 
-        infoCallbacks.push(handleInfo);
+        analysisInfoCallbacks.push(handleInfo);
 
         const timeout = setTimeout(() => {
             // Clean up
-            const idx = infoCallbacks.indexOf(handleInfo);
-            if (idx !== -1) infoCallbacks.splice(idx, 1);
+            const idx = analysisInfoCallbacks.indexOf(handleInfo);
+            if (idx !== -1) analysisInfoCallbacks.splice(idx, 1);
             reject(new Error("Engine timeout"));
         }, 15000);
 
-        pendingMoveResolvers.push((best) => {
+        analysisMoveResolvers.push((best) => {
             clearTimeout(timeout);
             // remove callback
-            const idx = infoCallbacks.indexOf(handleInfo);
-            if (idx !== -1) infoCallbacks.splice(idx, 1);
+            const idx = analysisInfoCallbacks.indexOf(handleInfo);
+            if (idx !== -1) analysisInfoCallbacks.splice(idx, 1);
 
             resolve({
                 bestMove: best,
@@ -307,6 +357,6 @@ export async function analyzePosition(
         });
 
         // Launch search
-        stockfishWorker.postMessage(`go depth ${targetDepth}`);
+        analysisWorker.postMessage(`go depth ${targetDepth}`);
     });
 }
