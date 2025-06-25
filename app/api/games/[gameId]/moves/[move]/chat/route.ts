@@ -5,7 +5,6 @@ import { pawnPilotSystemPrompt } from "@/lib/prompts";
 import { ChatRequestSchema } from "@/lib/validation/chat";
 import { streamText } from "ai";
 import { openai } from "@ai-sdk/openai";
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 export const GET = withErrorHandling(async function GET(
     _req: NextRequest,
@@ -22,17 +21,21 @@ export const GET = withErrorHandling(async function GET(
 
     const { data, error } = await supabase
         .from("move_chat")
-        .select("id, role, content, created_at")
+        .select("messages")
         .eq("game_id", gameId)
         .eq("move_number", moveNumber)
-        .order("created_at", { ascending: true });
+        .single();
 
     if (error) {
+        if (error.code === "PGRST116") {
+            // No messages found for this move
+            return NextResponse.json({ messages: [] });
+        }
         console.error("[MoveChat] GET error", error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ messages: data ?? [] });
+    return NextResponse.json({ messages: data?.messages ?? [] });
 });
 
 export const POST = withErrorHandling(async function POST(
@@ -57,15 +60,53 @@ export const POST = withErrorHandling(async function POST(
             return NextResponse.json({ error: "No user message found" }, { status: 400 });
         }
 
-        // Insert user message
-        const { error: insertUserErr } = await supabase.from("move_chat").insert({
-            game_id: gameId,
-            move_number: moveNumber,
+        // Get existing chat history or create new entry
+        const { data: existingChat, error: fetchError } = await supabase
+            .from("move_chat")
+            .select("id, messages")
+            .eq("game_id", gameId)
+            .eq("move_number", moveNumber)
+            .single();
+
+        if (fetchError && fetchError.code !== "PGRST116") {
+            console.error("[MoveChat] fetch error", fetchError);
+            return NextResponse.json({ error: fetchError.message }, { status: 500 });
+        }
+
+        // Add user message to chat history
+        const userMessage = {
             role: "user",
             content: lastUserMessage.content,
-        });
-        if (insertUserErr) {
-            console.error("[MoveChat] insert user error", insertUserErr);
+            created_at: new Date().toISOString()
+        };
+
+        const existingMessages = existingChat?.messages ?? [];
+        const updatedMessages = [...existingMessages, userMessage];
+
+        // Insert or update chat history
+        if (existingChat) {
+            const { error: updateError } = await supabase
+                .from("move_chat")
+                .update({ messages: updatedMessages })
+                .eq("id", existingChat.id);
+
+            if (updateError) {
+                console.error("[MoveChat] update error", updateError);
+                return NextResponse.json({ error: updateError.message }, { status: 500 });
+            }
+        } else {
+            const { error: insertError } = await supabase
+                .from("move_chat")
+                .insert({
+                    game_id: gameId,
+                    move_number: moveNumber,
+                    messages: updatedMessages
+                });
+
+            if (insertError) {
+                console.error("[MoveChat] insert error", insertError);
+                return NextResponse.json({ error: insertError.message }, { status: 500 });
+            }
         }
 
         // Extract context from body (sent via useChat body option)
@@ -100,33 +141,43 @@ export const POST = withErrorHandling(async function POST(
             `Existing explanation: ${explanation}`,
         ]);
 
-        // Build message history (last 20 messages)
-        const { data: history } = await supabase
-            .from("move_chat")
-            .select("role, content")
-            .eq("game_id", gameId)
-            .eq("move_number", moveNumber)
-            .order("created_at", { ascending: true })
-            .limit(20);
-
-        const historyMsgs = (history ?? []).map((m) => ({ role: m.role as "user" | "assistant" | "system", content: m.content }));
+        // Convert stored messages to format expected by AI SDK
+        const historyMsgs = updatedMessages.map(m => ({
+            role: m.role as "user" | "assistant" | "system",
+            content: m.content
+        }));
 
         // Use ai-sdk to generate assistant text as a stream
-
         const result = streamText({
             model: openai(process.env.OPENAI_MODEL ?? "gpt-4o"),
             system: systemPrompt,
-            messages: [...historyMsgs, ...messages] as any,
+            messages: historyMsgs as any,
             onFinish: async (completion) => {
                 // Persist assistant message once stream is complete
-                const { error: insertAssistErr } = await supabase.from("move_chat").insert({
-                    game_id: gameId,
-                    move_number: moveNumber,
+                const assistantMessage = {
                     role: "assistant",
                     content: completion.text || "(error)",
-                });
-                if (insertAssistErr) {
-                    console.error("[MoveChat] insert assistant error", insertAssistErr);
+                    created_at: new Date().toISOString()
+                };
+
+                const { data: latestChat } = await supabase
+                    .from("move_chat")
+                    .select("id, messages")
+                    .eq("game_id", gameId)
+                    .eq("move_number", moveNumber)
+                    .single();
+
+                if (latestChat) {
+                    const { error: updateError } = await supabase
+                        .from("move_chat")
+                        .update({
+                            messages: [...latestChat.messages, assistantMessage]
+                        })
+                        .eq("id", latestChat.id);
+
+                    if (updateError) {
+                        console.error("[MoveChat] update assistant error", updateError);
+                    }
                 }
             },
         });
@@ -149,15 +200,53 @@ export const POST = withErrorHandling(async function POST(
         explanation: suppliedExplanation,
     } = parseResult.data;
 
-    // Insert user message
-    const { error: insertUserErr } = await supabase.from("move_chat").insert({
-        game_id: gameId,
-        move_number: moveNumber,
+    // Get existing chat history or create new entry
+    const { data: existingChat, error: fetchError } = await supabase
+        .from("move_chat")
+        .select("id, messages")
+        .eq("game_id", gameId)
+        .eq("move_number", moveNumber)
+        .single();
+
+    if (fetchError && fetchError.code !== "PGRST116") {
+        console.error("[MoveChat] fetch error", fetchError);
+        return NextResponse.json({ error: fetchError.message }, { status: 500 });
+    }
+
+    // Add user message to chat history
+    const userMessage = {
         role: "user",
         content,
-    });
-    if (insertUserErr) {
-        console.error("[MoveChat] insert user error", insertUserErr);
+        created_at: new Date().toISOString()
+    };
+
+    const existingMessages = existingChat?.messages ?? [];
+    const updatedMessages = [...existingMessages, userMessage];
+
+    // Insert or update chat history
+    if (existingChat) {
+        const { error: updateError } = await supabase
+            .from("move_chat")
+            .update({ messages: updatedMessages })
+            .eq("id", existingChat.id);
+
+        if (updateError) {
+            console.error("[MoveChat] update error", updateError);
+            return NextResponse.json({ error: updateError.message }, { status: 500 });
+        }
+    } else {
+        const { error: insertError } = await supabase
+            .from("move_chat")
+            .insert({
+                game_id: gameId,
+                move_number: moveNumber,
+                messages: updatedMessages
+            });
+
+        if (insertError) {
+            console.error("[MoveChat] insert error", insertError);
+            return NextResponse.json({ error: insertError.message }, { status: 500 });
+        }
     }
 
     // ------------------------------------------------------------------
@@ -188,36 +277,43 @@ export const POST = withErrorHandling(async function POST(
         `Existing explanation: ${explanation}`,
     ]);
 
-    // Build message history (last 20 messages)
-    const { data: history } = await supabase
-        .from("move_chat")
-        .select("role, content")
-        .eq("game_id", gameId)
-        .eq("move_number", moveNumber)
-        .order("created_at", { ascending: true })
-        .limit(20);
-
-    const msgs = (history ?? []).map((m) => ({ role: m.role as "user" | "assistant" | "system", content: m.content }));
-
-    // Add current user content at end (already persisted)
-    msgs.push({ role: "user", content });
+    // Convert stored messages to format expected by AI SDK
+    const msgs = updatedMessages.map(m => ({
+        role: m.role as "user" | "assistant" | "system",
+        content: m.content
+    }));
 
     // Use ai-sdk to generate assistant text as a stream
-
     const result = streamText({
         model: openai(process.env.OPENAI_MODEL ?? "gpt-4o"),
         system: systemPrompt,
         messages: msgs,
         onFinish: async (completion) => {
             // Persist assistant message once stream is complete
-            const { error: insertAssistErr } = await supabase.from("move_chat").insert({
-                game_id: gameId,
-                move_number: moveNumber,
+            const assistantMessage = {
                 role: "assistant",
                 content: completion.text || "(error)",
-            });
-            if (insertAssistErr) {
-                console.error("[MoveChat] insert assistant error", insertAssistErr);
+                created_at: new Date().toISOString()
+            };
+
+            const { data: latestChat } = await supabase
+                .from("move_chat")
+                .select("id, messages")
+                .eq("game_id", gameId)
+                .eq("move_number", moveNumber)
+                .single();
+
+            if (latestChat) {
+                const { error: updateError } = await supabase
+                    .from("move_chat")
+                    .update({
+                        messages: [...latestChat.messages, assistantMessage]
+                    })
+                    .eq("id", latestChat.id);
+
+                if (updateError) {
+                    console.error("[MoveChat] update assistant error", updateError);
+                }
             }
         },
     });
