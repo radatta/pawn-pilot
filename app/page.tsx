@@ -75,10 +75,12 @@ export default function PawnPilotLanding() {
                   </p>
                 </div>
                 <div className="flex flex-col gap-3 min-[400px]:flex-row">
-                  <Button size="lg" className="font-semibold px-8 py-6 text-base">
-                    <Play className="w-4 h-4 mr-2" />
-                    Start Playing Now
-                  </Button>
+                  <Link href="/play">
+                    <Button size="lg" className="font-semibold px-8 py-6 text-base">
+                      <Play className="w-4 h-4 mr-2" />
+                      Start Playing Now
+                    </Button>
+                  </Link>
                   <Button variant="outline" size="lg" className="px-8 py-6 text-base">
                     Watch Demo
                     <ArrowRight className="w-4 h-4 ml-2" />
